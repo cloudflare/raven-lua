@@ -38,14 +38,14 @@ local mt = { __index = _M }
 --         This implementation only supports UDP
 function new(self, dsn)
    return setmetatable({dsn=dsn,
-						sock=nil,
-					    project_id=nil,
-						host=nil,
-						port=nil,
-					    public_key=nil,
-						secret_key=nil,
-						client_id="Lua Sentry Client/0.1",
-						levels={'fatal','error','warning','info','debug'}}, mt)
+                        sock=nil,
+                        project_id=nil,
+                        host=nil,
+                        port=nil,
+                        public_key=nil,
+                        secret_key=nil,
+                        client_id="Lua Sentry Client/0.1",
+                        levels={'fatal','error','warning','info','debug'}}, mt)
 end
 
 -- hexrandom: returns a random number in hex with the specified number
@@ -53,7 +53,7 @@ end
 local function hexrandom(digits)
    local s = ''
    for i=1,digits do
-	  s = s .. string_format("%0x", math_random(1,16)-1)
+      s = s .. string_format("%0x", math_random(1,16)-1)
    end
    return s
 end
@@ -85,17 +85,17 @@ function catcher(self, err)
    local stack = ''
    local level = 2
    while true do
-	  local info = debug_getinfo(level, "Snl")
-	  if not info then break end
-	  local f
-	  if info.what == "C" then
-		 f = "[C] " .. tostring(info.name)
-	  else
-		 f = string_format("%s (%s:%d)", tostring(info.name), info.short_src, info.currentline)
-	  end
-	  if level == 2 then culprit = f end
-	  stack = stack .. f .. "\n"
-	  level = level + 1
+      local info = debug_getinfo(level, "Snl")
+      if not info then break end
+      local f
+      if info.what == "C" then
+         f = "[C] " .. tostring(info.name)
+      else
+         f = string_format("%s (%s:%d)", tostring(info.name), info.short_src, info.currentline)
+      end
+      if level == 2 then culprit = f end
+      stack = stack .. f .. "\n"
+      level = level + 1
    end
    err = err .. "\n" .. stack
    capture(self, self.levels[2], err, culprit, nil)
@@ -106,8 +106,8 @@ end
 -- the function execution worked and an error if not
 function call(self, f, ...)
    return xpcall(f,
-				 function (err) self:catcher(err) end,
-				...)
+                 function (err) self:catcher(err) end,
+                ...)
 end
 
 -- capture: capture an error that has occurred and send it to
@@ -127,24 +127,24 @@ end
 --        (expected to be key: value pairs)
 function capture(self, level, message, culprit, tags)
    if not self.project_id then
-	  self.public_key, self.secret_key, self.host, self.port, self.project_id =
-		 string_match(self.dsn, "^udp://([^:]+):([^@]+)@([^:]+):([0-9]+)/(.+)$")
+      self.public_key, self.secret_key, self.host, self.port, self.project_id =
+         string_match(self.dsn, "^udp://([^:]+):([^@]+)@([^:]+):([0-9]+)/(.+)$")
    end
 
    if self.project_id then
-	  local event_id = uuid4()
+      local event_id = uuid4()
 
-	  send(self, {
-			  project   = self.project_id,
-			  event_id  = event_id,
-			  timestamp = iso8601(),
-			  culprit   = culprit,
-			  level     = level,
-			  message   = message,
-			  tags      = tags
-	  })
-	  
-	  return event_id
+      send(self, {
+              project   = self.project_id,
+              event_id  = event_id,
+              timestamp = iso8601(),
+              culprit   = culprit,
+              level     = level,
+              message   = message,
+              tags      = tags
+      })
+      
+      return event_id
    end
    
    return nil
@@ -157,27 +157,27 @@ function send(self, t)
    local t_json = json_encode(t)
 
    if not self.sock then
-	  local sock = ngx.socket.udp()
+      local sock = ngx.socket.udp()
 
-	  if sock then
-		 sock:setpeername(self.host, self.port)
-		 self.sock = sock
-	  end
+      if sock then
+         sock:setpeername(self.host, self.port)
+         self.sock = sock
+      end
    end
 
    if self.sock then
-	  self.sock:send(string_format(xsentryauth,
-								   self.client_id,
-								   iso8601(),
-								   self.public_key,
-								   self.secret_key,
-								   t_json))
+      self.sock:send(string_format(xsentryauth,
+                                   self.client_id,
+                                   iso8601(),
+                                   self.public_key,
+                                   self.secret_key,
+                                   t_json))
    end
 end
 
 local class_mt = {
    __newindex = function (table, key, val)
-	  error('attempt to write to undeclared variable "' .. tostring(key) .. '"')
+      error('attempt to write to undeclared variable "' .. tostring(key) .. '"')
    end
 }
 
