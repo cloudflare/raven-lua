@@ -1,10 +1,7 @@
--- raven.lua: a Lua Raven client used to send errors to Sentry
--- Designed to run inside Nginx Lua. The main interface is then call()
--- function (which calls a function with arguments and traps
--- errors). The send() function can also be used to send a message to
--- Sentry.
---
 -- Copyright (c) 2013, CloudFlare, Inc.
+-- @author JGC <jgc@cloudflare.com>
+--
+-- raven.lua: a Lua Raven client used to send errors to Sentry
 
 local debug_getinfo = debug.getinfo
 
@@ -31,7 +28,7 @@ module(...)
 
 local mt = { __index = _M }
 
--- new: creates a new Sentry client. One parameter:
+-- new: creates a new Sentry client. Two parameters:
 --
 -- dsn:    The DSN of the Sentry instance with this format:
 --         {PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}
@@ -44,7 +41,7 @@ function new(self, dsn)
                         port=nil,
                         public_key=nil,
                         secret_key=nil,
-                        client_id="Lua Sentry Client/0.1",
+                        client_id="Lua Sentry Client/0.4",
                         levels={'fatal','error','warning','info','debug'}}, mt)
 end
 
@@ -101,7 +98,7 @@ function catcher(self, err)
    capture(self, self.levels[2], err, culprit, nil)
 end
 
--- call: call function f with parameters ... wrapped in a xpcall and
+-- call: call function f with parameters ... wrapped in a pcall and
 -- send any exception to Sentry. Returns a boolean indicating whether
 -- the function execution worked and an error if not
 function call(self, f, ...)
@@ -125,6 +122,7 @@ end
 --
 --  tags: a table of tags to associate with the event being captured
 --        (expected to be key: value pairs)
+--
 function capture(self, level, message, culprit, tags)
    if not self.project_id then
       self.public_key, self.secret_key, self.host, self.port, self.project_id =
@@ -160,6 +158,9 @@ function send(self, t)
       local sock = ngx.socket.udp()
 
       if sock then
+
+         -- TODO: Don't ignore the error on the setpeername here
+
          sock:setpeername(self.host, self.port)
          self.sock = sock
       end
