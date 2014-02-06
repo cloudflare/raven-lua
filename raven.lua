@@ -88,7 +88,8 @@ function catcher(self, err)
       if info.what == "C" then
          f = "[C] " .. tostring(info.name)
       else
-         f = string_format("%s (%s:%d)", tostring(info.name), info.short_src, info.currentline)
+         f = string_format("%s (%s:%d)", tostring(info.name), info.short_src,
+               info.currentline)
       end
       if level == 2 then culprit = f end
       stack = stack .. f .. "\n"
@@ -139,16 +140,24 @@ function capture(self, level, message, culprit, tags)
               culprit   = culprit,
               level     = level,
               message   = message,
-              tags      = tags
+              tags      = tags,
+              server_name = ngx.var.server_name,
+              platform  = "lua",
+--[[
+              logger
+              modules
+              extra
+]]
       })
-      
+
       return event_id
    end
-   
+
    return nil
 end
 
-local xsentryauth="Sentry sentry_version=2.0,sentry_client=%s,sentry_timestamp=%s,sentry_key=%s,sentry_secret=%s\n\n%s\n"
+local xsentryauth="Sentry sentry_version=2.0,sentry_client=%s,"
+      .. "sentry_timestamp=%s,sentry_key=%s,sentry_secret=%s\n\n%s\n"
 
 -- send: actually sends the structured data to the Sentry server
 function send(self, t)
