@@ -17,33 +17,23 @@ local os_time = os.time
 
 local setmetatable = setmetatable
 
-local string_format = string.format
-local string_match = string.match
+local string_format  = string.format
+local string_match   = string.match
+local string_find    = string.find
+local string_sub     = string.sub
 
 local tostring = tostring
 
 local xpcall = xpcall
 
-module(...)
+--module(...)
+local _json = {
+     platform  = "lua",
+}
+
+local _M = {}
 
 local mt = { __index = _M }
-
--- new: creates a new Sentry client. Two parameters:
---
--- dsn:    The DSN of the Sentry instance with this format:
---         {PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}
---         This implementation only supports UDP
-function new(self, dsn)
-   return setmetatable({dsn=dsn,
-                        sock=nil,
-                        project_id=nil,
-                        host=nil,
-                        port=nil,
-                        public_key=nil,
-                        secret_key=nil,
-                        client_id="Lua Sentry Client/0.4",
-                        levels={'fatal','error','warning','info','debug'}}, mt)
-end
 
 -- hexrandom: returns a random number in hex with the specified number
 -- of digits
@@ -75,37 +65,109 @@ local function iso8601()
       t["year"], t["month"], t["day"], t["hour"], t["min"], t["sec"])
 end
 
--- catcher: used to catch an error from xpcall and send the
--- information to Sentry
-function catcher(self, err)
-   local culprit = ''
-   local stack = ''
-   local level = 2
-   while true do
-      local info = debug_getinfo(level, "Snl")
-      if not info then break end
-      local f
-      if info.what == "C" then
-         f = "[C] " .. tostring(info.name)
-      else
-         f = string_format("%s (%s:%d)", tostring(info.name), info.short_src,
-               info.currentline)
-      end
-      if level == 2 then culprit = f end
-      stack = stack .. f .. "\n"
-      level = level + 1
+function _M._parse_host_port(protocol, host)
+   local i = string_find(host, ":")
+   if not i then
+      -- TODO
+      return host, 80
    end
-   err = err .. "\n" .. stack
-   capture(self, self.levels[2], err, culprit, nil)
+
+   local port_str = string_sub(host, i + 1)
+   local port = tonumber(port_str)
+   if not port then
+      return nil, nil, "illegal port: " .. port_str
+   end
+
+   return string_sub(host, 1, i - 1), port
 end
 
--- call: call function f with parameters ... wrapped in a pcall and
--- send any exception to Sentry. Returns a boolean indicating whether
--- the function execution worked and an error if not
-function call(self, f, ...)
-   return xpcall(f,
-                 function (err) self:catcher(err) end,
-                ...)
+function _M._parse_dsn(dsn, obj)
+   if not obj then
+      obj = {}
+   end
+
+   assert(type(obj) == "table")
+
+   -- '{PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}'
+   obj.protocol, obj.public_key, obj.secret_key, obj.long_host,
+         obj.path, obj.project_id =
+         string_match(dsn, "^([^:]+)://([^:]+):([^@]+)@([^/]+)(.*/)(.+)$")
+
+   if obj.protocol and obj.public_key and obj.secret_key and obj.long_host
+         and obj.project_id then
+
+      local host, port, err = _M._parse_host_port(obj.protocol, obj.long_host)
+
+      if not host or not port then
+         return nil, err
+      end
+
+      obj.host = host
+      obj.port = port
+
+      return obj
+   else
+      return nil
+   end
+end
+
+-- new: creates a new Sentry client. Two parameters:
+--
+-- dsn:    The DSN of the Sentry instance with this format:
+--         {PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}
+--         This implementation only supports UDP
+function _M.new(self, dsn, conf)
+   if not dsn then
+      return nil, "empty dsn"
+   end
+
+   local obj = {}
+
+   if not _M._parse_dsn(dsn, obj) then
+      return nil, "Bad DSN"
+   end
+
+   obj.client_id = "Lua Sentry Client/0.4"
+   return setmetatable(obj, mt)
+   --[[
+   return setmetatable({dsn=dsn,
+                        sock=nil,
+                        project_id=nil,
+                        host=nil,
+                        port=nil,
+                        public_key=nil,
+                        secret_key=nil,
+                        client_id="Lua Sentry Client/0.4",
+                        levels={'fatal','error','warning','info','debug'}}, mt)
+                        ]]
+end
+
+function _M.captureException(self, exception, conf)
+
+end
+
+function _M.captureMessage(self, message, conf)
+   _json.message = message
+   self:capture_core(_json)
+end
+
+function _M.capture_core(self, json)
+   local culprit, stack = self.get_debug_info(4)
+
+   --json.project   = self.project_id,
+   json.event_id  = uuid4()
+   json.culprit   = culprit
+   json.timestamp = iso8601()
+   json.level     = self.level
+   -- TODO
+   --tags      = tags,
+   json.server_name = ngx.var.server_name
+
+   if self.protocol == "udp" then
+      self:udp_send(json)
+   else
+      error("protocol not implemented yet: " .. self.protocl)
+   end
 end
 
 -- capture: capture an error that has occurred and send it to
@@ -124,11 +186,7 @@ end
 --  tags: a table of tags to associate with the event being captured
 --        (expected to be key: value pairs)
 --
-function capture(self, level, message, culprit, tags)
-   if not self.project_id then
-      self.public_key, self.secret_key, self.host, self.port, self.project_id =
-         string_match(self.dsn, "^udp://([^:]+):([^@]+)@([^:]+):([0-9]+)/(.+)$")
-   end
+function _M.capture(self, level, message, exception, culprit, tags)
 
    if self.project_id then
       local event_id = uuid4()
@@ -156,11 +214,64 @@ function capture(self, level, message, culprit, tags)
    return nil
 end
 
+-- level 2 is the function which calls get_debug_info
+function _M.get_debug_info(level)
+   local culprit = ''
+   local stack = ''
+   local level = level and level or 2
+   --print(json.encode(debug_getinfo(2, "Snl")))
+   local info = debug_getinfo(level, "Snl")
+   if info.name then
+      culprit = info.name
+   else
+      culprit = info.short_src .. ":" .. info.linedefined
+   end
+   stack = debug.traceback("", 2)
+   --[[
+   while true do
+      local info = debug_getinfo(level, "Snl")
+      if not info then break end
+      local f
+      if info.what == "C" then
+         f = "[C] " .. tostring(info.name)
+      else
+         f = string_format("%s (%s:%d)", tostring(info.name), info.short_src,
+               info.currentline)
+      end
+      if level == 2 then culprit = f end
+      stack = stack .. f .. "\n"
+      level = level + 1
+   end
+   ]]
+   return culprit, stack
+end
+
+-- catcher: used to catch an error from xpcall and send the
+-- information to Sentry
+function catcher(self, err)
+   local culprit
+   local stack
+   culprit, stack = get_debug_info()
+   err = err .. "\n" .. stack
+   capture(self, self.levels[2], err, culprit, nil)
+end
+
+-- call: call function f with parameters ... wrapped in a pcall and
+-- send any exception to Sentry. Returns a boolean indicating whether
+-- the function execution worked and an error if not
+function call(self, f, ...)
+   return xpcall(f,
+                 function (err) self:catcher(err) end,
+                ...)
+end
 local xsentryauth="Sentry sentry_version=2.0,sentry_client=%s,"
       .. "sentry_timestamp=%s,sentry_key=%s,sentry_secret=%s\n\n%s\n"
 
+function _M.http_send(self, t)
+end
+
 -- send: actually sends the structured data to the Sentry server
-function send(self, t)
+function _M.udp_send(self, t)
    local t_json = json_encode(t)
 
    if not self.sock then
@@ -191,4 +302,5 @@ local class_mt = {
    end
 }
 
-setmetatable(_M, class_mt)
+--setmetatable(_M, class_mt)
+return _M
