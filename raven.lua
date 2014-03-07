@@ -1,32 +1,35 @@
 -- Copyright (c) 2013, CloudFlare, Inc.
 -- @author JGC <jgc@cloudflare.com>
---
+-- @author Jiale Zhi <vipcalio@gmail.com>
 -- raven.lua: a Lua Raven client used to send errors to Sentry
 
-local debug_getinfo = debug.getinfo
-
 local json = require("cjson")
-local json_encode = json.encode
-
-local math_random = math.random
 
 local ngx = ngx
-
-local os_date = os.date
-local os_time = os.time
-
 local setmetatable = setmetatable
+local tostring = tostring
+local xpcall = xpcall
 
+local os_date        = os.date
+local os_time        = os.time
+local debug_getinfo  = debug.getinfo
+local math_random    = math.random
+local json_encode    = json.encode
 local string_format  = string.format
 local string_match   = string.match
 local string_find    = string.find
 local string_sub     = string.sub
 
-local tostring = tostring
+local socket
+if not ngx then
+   local ok, luasocket = pcall(require, "socket")
+   if not ok then
+      error("No socket library found, you need ngx.socket or luasocket.")
+   end
+   socket = luasocket
+end
 
-local xpcall = xpcall
 
---module(...)
 local _json = {
      platform  = "lua",
 }
@@ -65,6 +68,11 @@ local function iso8601()
       t["year"], t["month"], t["day"], t["hour"], t["min"], t["sec"])
 end
 
+local function get_server_name()
+   return ngx and ngx.var.server_name or "undefined"
+end
+
+--- Parse long host ("127.0.0.1:2222") to host ("127.0.0.1") and port (2222)
 function _M._parse_host_port(protocol, host)
    local i = string_find(host, ":")
    if not i then
@@ -161,12 +169,12 @@ function _M.capture_core(self, json)
    json.level     = self.level
    -- TODO
    --tags      = tags,
-   json.server_name = ngx.var.server_name
+   json.server_name = get_server_name()
 
    if self.protocol == "udp" then
       self:udp_send(json)
    else
-      error("protocol not implemented yet: " .. self.protocl)
+      error("protocol not implemented yet: " .. self.protocol)
    end
 end
 
@@ -275,7 +283,7 @@ function _M.udp_send(self, t)
    local t_json = json_encode(t)
 
    if not self.sock then
-      local sock = ngx.socket.udp()
+      local sock = socket.udp()
 
       if sock then
 
