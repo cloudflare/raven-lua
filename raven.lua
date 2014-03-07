@@ -178,6 +178,8 @@ function _M.capture_core(self, json)
 
    if self.protocol == "udp" then
       self:udp_send(json)
+   elseif self.protocol == "http" then
+      self:http_send(json)
    else
       error("protocol not implemented yet: " .. self.protocol)
    end
@@ -266,6 +268,15 @@ end
 local xsentryauth="Sentry sentry_version=2.0,sentry_client=%s,"
       .. "sentry_timestamp=%s,sentry_key=%s,sentry_secret=%s\n\n%s\n"
 
+local xsentryauth_http = [[X-Sentry-Auth: Sentry sentry_version=5,
+sentry_client=%s,
+sentry_timestamp=%s,
+sentry_key=%s,
+sentry_secret=%s
+
+%s
+]]
+
 function _M.http_send(self, t)
 end
 
@@ -293,6 +304,32 @@ function _M.udp_send(self, t)
                                    self.secret_key,
                                    t_json))
    end
+end
+
+function _M.http_send(self, t)
+   local t_json = json_encode(t)
+
+   if not self.sock then
+      local sock = socket.tcp()
+
+      if sock then
+
+         -- TODO: Don't ignore the error on the setpeername here
+
+         sock:connect(self.host, self.port)
+         self.sock = sock
+      end
+   end
+
+   if self.sock then
+      self.sock:send(string_format(xsentryauth_http,
+                                   self.client_id,
+                                   iso8601(),
+                                   self.public_key,
+                                   self.secret_key,
+                                   t_json))
+   end
+
 end
 
 local class_mt = {
