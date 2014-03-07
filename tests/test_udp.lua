@@ -19,7 +19,6 @@ function setup()
    local sock = socket.udp()
    sock:setsockname("*", port)
    server.sock = sock
-   --server = assert(socket.bind("*", port))
    rvn = raven:new(dsn)
 end
 
@@ -33,7 +32,7 @@ function get_body(response)
 end
 
 function test_capture_message()
-   rvn:captureMessage("Sentry is a realtime event logging and aggregation platform.")
+   local id = rvn:captureMessage("Sentry is a realtime event logging and aggregation platform.")
    local res = assert(server.sock:receive())
    local json_str = get_body(res)
    local json = cjson.decode(json_str)
@@ -42,8 +41,9 @@ function test_capture_message()
    assert_equal("undefined", json.server_name)
    assert_equal("Sentry is a realtime event logging and aggregation platform.", json.message)
    assert_equal("lua", json.platform)
-   assert_equal("tests/test_udp.lua:35", json.culprit)
+   assert_not_nil(string_match(json.culprit, "tests/test_udp.lua:%d+"))
    -- Example timestamp: 2014-03-07T00:17:47
    assert_not_nil(string_match(json.timestamp, "%d%d%d%d%-%d%d%-%d%dT%d%d:%d%d:%d%d"))
    assert_not_nil(string_match(json.event_id, "%x+"))
+   assert_not_nil(string_match(id, "%x+"))
 end

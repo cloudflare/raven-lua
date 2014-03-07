@@ -155,7 +155,7 @@ end
 --
 function _M.captureMessage(self, message, conf)
    _json.message = message
-   self:capture_core(_json)
+   return self:capture_core(_json)
 end
 
 -- capture_core: core capture function.
@@ -166,8 +166,9 @@ end
 function _M.capture_core(self, json)
    local culprit, stack = self.get_debug_info(4)
 
+   local event_id = uuid4()
    --json.project   = self.project_id,
-   json.event_id  = uuid4()
+   json.event_id  = event_id
    json.culprit   = culprit
    json.timestamp = iso8601()
    json.level     = self.level
@@ -180,6 +181,8 @@ function _M.capture_core(self, json)
    else
       error("protocol not implemented yet: " .. self.protocol)
    end
+
+   return json.event_id
 end
 
 -- capture: capture an error that has occurred and send it to
