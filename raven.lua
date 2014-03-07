@@ -68,11 +68,14 @@ local function iso8601()
       t["year"], t["month"], t["day"], t["hour"], t["min"], t["sec"])
 end
 
-local function get_server_name()
+-- _get_server_name: returns current nginx server name if ngx_lua is used.
+-- If ngx_lua is not used, returns "undefined"
+local function _get_server_name()
    return ngx and ngx.var.server_name or "undefined"
 end
 
---- Parse long host ("127.0.0.1:2222") to host ("127.0.0.1") and port (2222)
+-- _parse_host_port: parse long host ("127.0.0.1:2222")
+-- to host ("127.0.0.1") and port (2222)
 function _M._parse_host_port(protocol, host)
    local i = string_find(host, ":")
    if not i then
@@ -89,6 +92,8 @@ function _M._parse_host_port(protocol, host)
    return string_sub(host, 1, i - 1), port
 end
 
+-- _parse_dsn: gets protocol, public_key, secret_key, host, port, path and
+-- project from DSN
 function _M._parse_dsn(dsn, obj)
    if not obj then
       obj = {}
@@ -137,28 +142,27 @@ function _M.new(self, dsn, conf)
 
    obj.client_id = "Lua Sentry Client/0.4"
    return setmetatable(obj, mt)
-   --[[
-   return setmetatable({dsn=dsn,
-                        sock=nil,
-                        project_id=nil,
-                        host=nil,
-                        port=nil,
-                        public_key=nil,
-                        secret_key=nil,
-                        client_id="Lua Sentry Client/0.4",
-                        levels={'fatal','error','warning','info','debug'}}, mt)
-                        ]]
 end
 
 function _M.captureException(self, exception, conf)
 
 end
 
+-- captureMessage: capture an message and send it to sentry.
+--
+-- Parameters:
+--   messsage: arbitrary message (most likely an error string)
+--
 function _M.captureMessage(self, message, conf)
    _json.message = message
    self:capture_core(_json)
 end
 
+-- capture_core: core capture function.
+--
+-- Parameters:
+--   json: json table to be sent. Don't need to fill event_id, culprit,
+--   timestamp and level, capture_core will fill these fileds for you.
 function _M.capture_core(self, json)
    local culprit, stack = self.get_debug_info(4)
 
@@ -169,7 +173,7 @@ function _M.capture_core(self, json)
    json.level     = self.level
    -- TODO
    --tags      = tags,
-   json.server_name = get_server_name()
+   json.server_name = _get_server_name()
 
    if self.protocol == "udp" then
       self:udp_send(json)
@@ -235,22 +239,6 @@ function _M.get_debug_info(level)
       culprit = info.short_src .. ":" .. info.linedefined
    end
    stack = debug.traceback("", 2)
-   --[[
-   while true do
-      local info = debug_getinfo(level, "Snl")
-      if not info then break end
-      local f
-      if info.what == "C" then
-         f = "[C] " .. tostring(info.name)
-      else
-         f = string_format("%s (%s:%d)", tostring(info.name), info.short_src,
-               info.currentline)
-      end
-      if level == 2 then culprit = f end
-      stack = stack .. f .. "\n"
-      level = level + 1
-   end
-   ]]
    return culprit, stack
 end
 
@@ -310,5 +298,4 @@ local class_mt = {
    end
 }
 
---setmetatable(_M, class_mt)
 return _M
