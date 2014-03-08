@@ -16,7 +16,14 @@ module("test_http", lunit.testcase)
 local server = {}
 local rvn
 local port = 39998
-local dsn = "http://pub:secret@127.0.0.1:" .. port .. "/sentry/proj-id"
+local dsn
+
+
+local function get_dsn()
+   dsn = "http://pub:secret@127.0.0.1:" .. port .. "/sentry/proj-id"
+   port = port + 1
+   return dsn
+end
 
 function setup()
    local sock = socket.tcp()
@@ -38,7 +45,9 @@ end
 function test_capture_message()
    local cpid = posix.fork()
    if cpid == 0 then
-      rvn = raven:new(dsn)
+      rvn = raven:new(get_dsn(), {
+         tags = { foo = "bar" }
+      })
       local id = rvn:captureMessage("Sentry is a realtime event logging and aggregation platform.")
       assert_not_nil(string_match(id, "%x+"))
       os_exit()
@@ -59,6 +68,8 @@ function test_capture_message()
       -- Example timestamp: 2014-03-07T00:17:47
       assert_not_nil(string_match(json.timestamp, "%d%d%d%d%-%d%d%-%d%dT%d%d:%d%d:%d%d"))
       assert_not_nil(string_match(json.event_id, "%x+"))
+      assert_equal(1, #json.tags)
+      assert_equal("bar", json.tags[1].foo)
       posix.wait(cpid)
    end
 end

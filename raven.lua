@@ -2,6 +2,16 @@
 -- @author JGC <jgc@cloudflare.com>
 -- @author Jiale Zhi <vipcalio@gmail.com>
 -- raven.lua: a Lua Raven client used to send errors to Sentry
+--
+-- According to client development guide
+--
+--    The following items are expected of production-ready clients:
+--
+--    √ DSN configuration
+--    √ Graceful failures (e.g. Sentry server unreachable)
+--    Scrubbing w/ processors
+--    √ Tag support
+--
 
 local json = require("cjson")
 
@@ -27,6 +37,11 @@ if not ngx then
       error("No socket library found, you need ngx.socket or luasocket.")
    end
    socket = luasocket
+end
+
+local ok, new_tab = pcall(require, "table.new")
+if not ok then
+    new_tab = function (narr, nrec) return {} end
 end
 
 
@@ -143,6 +158,13 @@ function _M.new(self, dsn, conf)
    end
 
    obj.client_id = "Lua Sentry Client/0.4"
+
+   if conf then
+      if conf.tags then
+         obj.tags = { conf.tags }
+      end
+   end
+
    return setmetatable(obj, mt)
 end
 
@@ -157,7 +179,7 @@ end
 --
 function _M.captureMessage(self, message, conf)
    _json.message = message
-   return self:capture_core(_json)
+   return self:capture_core(_json, conf)
 end
 
 -- capture_core: core capture function.
@@ -165,7 +187,7 @@ end
 -- Parameters:
 --   json: json table to be sent. Don't need to fill event_id, culprit,
 --   timestamp and level, capture_core will fill these fileds for you.
-function _M.capture_core(self, json)
+function _M.capture_core(self, json, conf)
    local culprit, stack = self.get_debug_info(4)
 
    local event_id = uuid4()
@@ -174,6 +196,17 @@ function _M.capture_core(self, json)
    json.culprit   = culprit
    json.timestamp = iso8601()
    json.level     = self.level
+   json.tags      = self.tags
+
+   if conf then
+      if conf.tags then
+         if not json.tags then
+            json.tags = { conf.tags }
+         else
+            json.tags[#json.tags + 1] = conf.tags
+         end
+      end
+   end
    -- TODO
    --tags      = tags,
    json.server_name = _get_server_name()
