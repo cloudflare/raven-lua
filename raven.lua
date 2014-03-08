@@ -181,7 +181,10 @@ function _M.capture_core(self, json)
    if self.protocol == "udp" then
       self:udp_send(json)
    elseif self.protocol == "http" then
-      self:http_send(json)
+      local ok, err = self:http_send(json)
+      if not ok then
+         return nil, err
+      end
    else
       error("protocol not implemented yet: " .. self.protocol)
    end
@@ -284,6 +287,7 @@ sentry_secret=%s
 -- UDP protocol
 function _M.udp_send(self, t)
    local t_json = json_encode(t)
+   local ok, err
 
    if not self.sock then
       local sock = socket.udp()
@@ -292,25 +296,32 @@ function _M.udp_send(self, t)
 
          -- TODO: Don't ignore the error on the setpeername here
 
-         sock:setpeername(self.host, self.port)
+         ok, err = sock:setpeername(self.host, self.port)
+         if not ok then
+            return nil, err
+         end
          self.sock = sock
       end
    end
 
+   local bytes
+
    if self.sock then
-      self.sock:send(string_format(xsentryauth_udp,
+      bytes, err = self.sock:send(string_format(xsentryauth_udp,
                                    self.client_id,
                                    iso8601(),
                                    self.public_key,
                                    self.secret_key,
                                    t_json))
    end
+   return bytes, err
 end
 
 -- http_send: actually sends the structured data to the Sentry server using
 -- HTTP protocol
 function _M.http_send(self, t)
    local t_json = json_encode(t)
+   local ok, err
 
    if not self.sock then
       local sock = socket.tcp()
@@ -319,13 +330,18 @@ function _M.http_send(self, t)
 
          -- TODO: Don't ignore the error on the setpeername here
 
-         sock:connect(self.host, self.port)
+         ok, err = sock:connect(self.host, self.port)
+         if not ok then
+            return nil, err
+         end
          self.sock = sock
       end
    end
 
+   local bytes
+
    if self.sock then
-      self.sock:send(string_format(xsentryauth_http,
+      bytes, err = self.sock:send(string_format(xsentryauth_http,
                                    self.client_id,
                                    iso8601(),
                                    self.public_key,
@@ -333,6 +349,7 @@ function _M.http_send(self, t)
                                    t_json))
    end
 
+   return bytes, err
 end
 
 return _M

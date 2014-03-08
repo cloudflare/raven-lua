@@ -8,11 +8,11 @@ local string_find    = string.find
 local string_sub     = string.sub
 local string_match   = string.match
 
-module("sanity", lunit.testcase)
+module("test_udp", lunit.testcase)
 
 local server = {}
 local rvn
-local port = 29999
+local port = 29997
 local dsn = "udp://pub:secret@127.0.0.1:" .. port .. "/sentry/proj-id"
 
 function setup()

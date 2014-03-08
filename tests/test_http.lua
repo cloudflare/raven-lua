@@ -11,11 +11,11 @@ local string_sub     = string.sub
 local string_match   = string.match
 local os_exit        = os.exit
 
-module("sanity", lunit.testcase)
+module("test_http", lunit.testcase)
 
 local server = {}
 local rvn
-local port = 29999
+local port = 39998
 local dsn = "http://pub:secret@127.0.0.1:" .. port .. "/sentry/proj-id"
 
 function setup()
