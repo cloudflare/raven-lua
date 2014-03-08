@@ -24,7 +24,6 @@ function setup()
    assert(sock:bind("*", port))
    assert(sock:listen(64))
    server.sock = sock
-   rvn = raven:new(dsn)
 end
 
 function teardown()
@@ -39,6 +38,7 @@ end
 function test_capture_message()
    local cpid = posix.fork()
    if cpid == 0 then
+      rvn = raven:new(dsn)
       local id = rvn:captureMessage("Sentry is a realtime event logging and aggregation platform.")
       assert_not_nil(string_match(id, "%x+"))
       os_exit()

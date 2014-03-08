@@ -36,7 +36,9 @@ local _json = {
 
 local _M = {}
 
-local mt = { __index = _M }
+local mt = {
+   __index = _M,
+}
 
 -- hexrandom: returns a random number in hex with the specified number
 -- of digits
@@ -265,7 +267,8 @@ function call(self, f, ...)
                  function (err) self:catcher(err) end,
                 ...)
 end
-local xsentryauth="Sentry sentry_version=2.0,sentry_client=%s,"
+
+local xsentryauth_udp="Sentry sentry_version=2.0,sentry_client=%s,"
       .. "sentry_timestamp=%s,sentry_key=%s,sentry_secret=%s\n\n%s\n"
 
 local xsentryauth_http = [[X-Sentry-Auth: Sentry sentry_version=5,
@@ -277,10 +280,8 @@ sentry_secret=%s
 %s
 ]]
 
-function _M.http_send(self, t)
-end
-
--- send: actually sends the structured data to the Sentry server
+-- udp_send: actually sends the structured data to the Sentry server using
+-- UDP protocol
 function _M.udp_send(self, t)
    local t_json = json_encode(t)
 
@@ -297,7 +298,7 @@ function _M.udp_send(self, t)
    end
 
    if self.sock then
-      self.sock:send(string_format(xsentryauth,
+      self.sock:send(string_format(xsentryauth_udp,
                                    self.client_id,
                                    iso8601(),
                                    self.public_key,
@@ -306,6 +307,8 @@ function _M.udp_send(self, t)
    end
 end
 
+-- http_send: actually sends the structured data to the Sentry server using
+-- HTTP protocol
 function _M.http_send(self, t)
    local t_json = json_encode(t)
 
@@ -331,11 +334,5 @@ function _M.http_send(self, t)
    end
 
 end
-
-local class_mt = {
-   __newindex = function (table, key, val)
-      error('attempt to write to undeclared variable "' .. tostring(key) .. '"')
-   end
-}
 
 return _M
