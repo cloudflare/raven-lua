@@ -54,6 +54,7 @@ end
 
 local _json = {
      platform  = "lua",
+     logger    = "root",
 }
 
 local _M = {}
@@ -168,10 +169,16 @@ function _M.new(self, dsn, conf)
    end
 
    obj.client_id = "Lua Sentry Client/0.4"
+   -- default level "error"
+   obj.level = "error"
 
    if conf then
       if conf.tags then
          obj.tags = { conf.tags }
+      end
+
+      if conf.logger then
+         obj.logger = conf.logger
       end
    end
 
