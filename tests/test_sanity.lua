@@ -2,6 +2,7 @@ require "lunit"
 
 local raven = require "raven"
 
+local string_match   = string.match
 local print = print
 
 module("sanity", lunit.testcase )
@@ -16,6 +17,8 @@ function test_parse_dsn()
    assert_equal(80, obj.port)
    assert_equal("/sentry/", obj.path)
    assert_equal("project-id", obj.project_id)
+   assert_equal("/sentry/api/project-id/store/", obj.request_uri)
+   assert_equal("https://example.com/sentry/api/project-id/store/", obj.server)
    assert_not_nil(obj)
 end
 
@@ -32,7 +35,8 @@ end
 
 function test_get_debug_info()
    local culprit, stack = raven.get_debug_info()
-   assert_equal("tests/test_sanity.lua:33", culprit)
+   --assert_equal("tests/test_sanity.lua:33", culprit)
+   assert_not_nil(string_match(culprit, "tests/test_sanity.lua:%d+"))
    assert_not_nil(stack)
 end
 

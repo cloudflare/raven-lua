@@ -142,6 +142,9 @@ function _M._parse_dsn(dsn, obj)
       obj.host = host
       obj.port = port
 
+      obj.request_uri = obj.path .. "api/" .. obj.project_id .. "/store/"
+      obj.server = obj.protocol .. "://" .. obj.long_host .. obj.request_uri
+
       return obj
    else
       return nil
@@ -315,11 +318,9 @@ end
 local xsentryauth_udp="Sentry sentry_version=2.0,sentry_client=%s,"
       .. "sentry_timestamp=%s,sentry_key=%s,sentry_secret=%s\n\n%s\n"
 
-local xsentryauth_http = [[X-Sentry-Auth: Sentry sentry_version=5,
-sentry_client=%s,
-sentry_timestamp=%s,
-sentry_key=%s,
-sentry_secret=%s
+local xsentryauth_http = [[POST %s
+User-Agent: %s
+X-Sentry-Auth: Sentry sentry_version=5, sentry_client=%s, sentry_timestamp=%s, sentry_key=%s, sentry_secret=%s
 
 %s
 ]]
@@ -381,16 +382,52 @@ function _M.http_send(self, t)
 
    local bytes
 
+   local uri = self.path .. "api/" .. self.project_id .. "/store/"
    if self.sock then
-      bytes, err = self.sock:send(string_format(xsentryauth_http,
+      local req = string_format(xsentryauth_http,
+                                   uri,
+                                   self.client_id,
                                    self.client_id,
                                    iso8601(),
                                    self.public_key,
                                    self.secret_key,
-                                   t_json))
+                                   t_json)
+      --print(req)
+      bytes, err = self.sock:send(req)
    end
 
    return bytes, err
+end
+
+local function test_dsn(dsn)
+   local rvn, err = _M.new(_M, dsn)
+
+   if not rvn then
+      print(err)
+   end
+
+   print(string_format("Using DSN configuration:\n  %s\n", dsn))
+   print(string_format([[Client configuration:
+  Servers        : %s
+  project        : %s
+  public_key     : %s
+  secret_key     : %s
+]], "", rvn.project_id, rvn.public_key, rvn.secret_key))
+   print("Send a message...")
+   local msg = "Hello from lua-raven!"
+   local id, err = rvn:captureMessage(msg)
+
+   if id then
+      print("success!")
+      print("Event id was '" .. id .. "'")
+   else
+      print("failed to send message '" .. msg .. "'\n" .. err)
+   end
+end
+
+if arg[1] and arg[1] == "test" then
+   local dsn = arg[2]
+   test_dsn(dsn)
 end
 
 return _M
