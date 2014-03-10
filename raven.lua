@@ -44,6 +44,13 @@ if not ok then
     new_tab = function (narr, nrec) return {} end
 end
 
+local function log(...)
+   if not ngx then
+      print(...)
+   else
+      ngx.log(ngx.NOTICE, ...)
+   end
+end
 
 local _json = {
      platform  = "lua",
@@ -165,6 +172,7 @@ function _M.new(self, dsn, conf)
       end
    end
 
+   -- log("new raven client, DSN: " .. dsn)
    return setmetatable(obj, mt)
 end
 
