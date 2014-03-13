@@ -224,6 +224,10 @@ function _M.capture_core(self, json, conf)
             json.tags[#json.tags + 1] = conf.tags
          end
       end
+
+      if conf.level then
+         json.level = conf.level
+      end
    end
    -- TODO
    --tags      = tags,
