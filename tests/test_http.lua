@@ -10,18 +10,19 @@ local string_find    = string.find
 local string_sub     = string.sub
 local string_match   = string.match
 local os_exit        = os.exit
+local random         = math.random
 
 module("test_http", lunit.testcase)
 
 local server = {}
 local rvn
-local port = 39998
+local port = random(20000, 65535)
 local dsn
 
 
 local function get_dsn()
    dsn = "http://pub:secret@127.0.0.1:" .. port .. "/sentry/proj-id"
-   port = port + 1
+   port = random(20000, 65535)
    return dsn
 end
 
@@ -42,6 +43,34 @@ function get_body(response)
    return string_sub(response, i + 1)
 end
 
+function http_read(sock)
+   local content_len
+   function get_data()
+       return function() return sock:receive("*l") end
+   end
+   for res, err in get_data() do
+      if res == "" then
+         break
+      end
+      local s1, s2, len = string_find(res, "Content%-Length: (%d+)")
+      if s1 and s2 then
+         content_len = len
+      end
+   end
+
+   local res, err = sock:receive(content_len)
+
+   if not res then
+      error("receive failed: " .. err)
+   end
+   return res
+end
+
+function http_responde(sock)
+   sock:send("HTTP/1.1 200 OK\r\nServer: nginx/1.2.6\r\nDate: Mon, 10 Mar 2014 22:25:51 GMT\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Language: en-us\r\nExpires: Mon, 10 Mar 2014 22:25:51 GMT\r\nVary: Accept-Language, Cookie\r\nLast-Modified: Mon, 10 Mar 2014 22:25:51 GMT\r\nCache-Control: max-age=0\r\n\r\n{\"id\": \"02c7830aae684d0088a0616a9ed81a6b\"}")
+   sock:close()
+end
+
 function test_capture_message()
    local cpid = posix.fork()
    if cpid == 0 then
@@ -53,12 +82,10 @@ function test_capture_message()
       os_exit()
    else
       local client = server.sock:accept()
-      local res, err = client:receive("*a")
-      if not res then
-         error("receive failed: " .. err)
-      end
-      local json_str = get_body(res)
+      local json_str = http_read(client)
+      --local json_str = get_body(res)
       local json = cjson.decode(json_str)
+      http_responde(client)
 
       assert_not_nil(json)
       assert_equal("undefined", json.server_name)

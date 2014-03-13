@@ -325,12 +325,7 @@ end
 local xsentryauth_udp="Sentry sentry_version=2.0,sentry_client=%s,"
       .. "sentry_timestamp=%s,sentry_key=%s,sentry_secret=%s\n\n%s\n"
 
-local xsentryauth_http = [[POST %s
-User-Agent: %s
-X-Sentry-Auth: Sentry sentry_version=5, sentry_client=%s, sentry_timestamp=%s, sentry_key=%s, sentry_secret=%s
-
-%s
-]]
+local xsentryauth_http = "POST %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: %d\r\nUser-Agent: %s\r\nX-Sentry-Auth: Sentry sentry_version=5, sentry_client=%s, sentry_timestamp=%s, sentry_key=%s, sentry_secret=%s\r\n\r\n%s"
 
 -- udp_send: actually sends the structured data to the Sentry server using
 -- UDP protocol
@@ -371,39 +366,51 @@ end
 function _M.http_send(self, t)
    local t_json = json_encode(t)
    local ok, err
+   local sock
 
    if not self.sock then
-      local sock = socket.tcp()
-
-      if sock then
-
-         -- TODO: Don't ignore the error on the setpeername here
-
-         ok, err = sock:connect(self.host, self.port)
-         if not ok then
-            return nil, err
-         end
-         self.sock = sock
+      sock, err = socket.tcp()
+      if not sock then
+         return nil, err
       end
+      self.sock = sock
+   end
+
+   ok, err = sock:connect(self.host, self.port)
+   if not ok then
+      return nil, err
    end
 
    local bytes
 
-   local uri = self.path .. "api/" .. self.project_id .. "/store/"
-   if self.sock then
-      local req = string_format(xsentryauth_http,
-                                   uri,
-                                   self.client_id,
-                                   self.client_id,
-                                   iso8601(),
-                                   self.public_key,
-                                   self.secret_key,
-                                   t_json)
-      --print(req)
-      bytes, err = self.sock:send(req)
+   local req = string_format(xsentryauth_http,
+                                self.request_uri,
+                                self.long_host,
+                                #t_json,
+                                self.client_id,
+                                self.client_id,
+                                iso8601(),
+                                self.public_key,
+                                self.secret_key,
+                                t_json)
+   --print(req)
+   bytes, err = self.sock:send(req)
+   if not bytes then
+      return nil, err
    end
 
-   return bytes, err
+   local res, err = self.sock:receive("*a")
+   if not res then
+      return nil, err
+   end
+
+   local s1, s2, status = string_find(res, "HTTP/%d%.%d (%d%d%d) %w+")
+   if status and status == "200" then
+      return bytes
+   end
+
+   local s1, s2 = string_find(res, "\r\n\r\n")
+   return nil, string_sub(res, s2 + 1)
 end
 
 local function test_dsn(dsn)
@@ -415,11 +422,11 @@ local function test_dsn(dsn)
 
    print(string_format("Using DSN configuration:\n  %s\n", dsn))
    print(string_format([[Client configuration:
-  Servers        : %s
+  Servers        : ['%s']
   project        : %s
   public_key     : %s
   secret_key     : %s
-]], "", rvn.project_id, rvn.public_key, rvn.secret_key))
+]], rvn.server, rvn.project_id, rvn.public_key, rvn.secret_key))
    print("Send a message...")
    local msg = "Hello from lua-raven!"
    local id, err = rvn:captureMessage(msg)
