@@ -52,6 +52,14 @@ local function log(...)
    end
 end
 
+local function errlog(...)
+   if not ngx then
+      print("[ERROR]", ...)
+   else
+      ngx.log(ngx.ERR, ...)
+   end
+end
+
 local _json = {
      platform  = "lua",
      logger    = "root",
@@ -187,7 +195,8 @@ function _M.new(self, dsn, conf)
 end
 
 function _M.captureException(self, exception, conf)
-
+   _json.exception = exception
+   return self:capture_core(_json, conf)
 end
 
 -- captureMessage: capture an message and send it to sentry.
@@ -233,17 +242,21 @@ function _M.capture_core(self, json, conf)
    --tags      = tags,
    json.server_name = _get_server_name()
 
+   local json_str = json_encode(json)
+   local ok, err
    if self.protocol == "udp" then
-      self:udp_send(json)
+      ok, err = self:udp_send(json_str)
    elseif self.protocol == "http" then
-      local ok, err = self:http_send(json)
-      if not ok then
-         return nil, err
-      end
+      ok, err = self:http_send(json_str)
    else
       error("protocol not implemented yet: " .. self.protocol)
    end
 
+   --print("sent")
+   if not ok then
+      errlog("Failed to send to sentry: ", json_str)
+      return nil, err
+   end
    return json.event_id
 end
 
@@ -333,8 +346,7 @@ local xsentryauth_http = "POST %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\nC
 
 -- udp_send: actually sends the structured data to the Sentry server using
 -- UDP protocol
-function _M.udp_send(self, t)
-   local t_json = json_encode(t)
+function _M.udp_send(self, json_str)
    local ok, err
 
    if not self.sock then
@@ -360,15 +372,14 @@ function _M.udp_send(self, t)
                                    iso8601(),
                                    self.public_key,
                                    self.secret_key,
-                                   t_json))
+                                   json_str))
    end
    return bytes, err
 end
 
 -- http_send: actually sends the structured data to the Sentry server using
 -- HTTP protocol
-function _M.http_send(self, t)
-   local t_json = json_encode(t)
+function _M.http_send(self, json_str)
    local ok, err
    local sock
 
@@ -390,13 +401,13 @@ function _M.http_send(self, t)
    local req = string_format(xsentryauth_http,
                                 self.request_uri,
                                 self.long_host,
-                                #t_json,
+                                #json_str,
                                 self.client_id,
                                 self.client_id,
                                 iso8601(),
                                 self.public_key,
                                 self.secret_key,
-                                t_json)
+                                json_str)
    --print(req)
    bytes, err = self.sock:send(req)
    if not bytes then
