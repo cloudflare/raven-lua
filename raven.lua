@@ -53,6 +53,7 @@ if not ok then
    end
 end
 
+
 local function log(...)
    if not ngx then
       print(...)
@@ -61,6 +62,7 @@ local function log(...)
    end
 end
 
+-- backup logging when cannot send data to sentry
 local function errlog(...)
    if not ngx then
       print("[ERROR]", ...)
@@ -69,14 +71,9 @@ local function errlog(...)
    end
 end
 
-local _json = {
-}
+local _json = {}
 
-local _exception = {
-   {
-
-   }
-}
+local _exception = { {} }
 
 local _M = {}
 
@@ -400,6 +397,8 @@ function _M.udp_send(self, json_str)
    return bytes, err
 end
 
+-- http_send_core: do the actual network send work. Expect an already
+-- connected socket
 function _M.http_send_core(self, json_str)
    local req = string_format(xsentryauth_http,
                                 self.request_uri,
@@ -427,8 +426,12 @@ function _M.http_send_core(self, json_str)
    end
 
    local s1, s2 = string_find(res, "\r\n\r\n")
+   if not s1 and s2 then
+      return ""
+   end
    return string_sub(res, s2 + 1)
 end
+
 -- http_send: actually sends the structured data to the Sentry server using
 -- HTTP protocol
 function _M.http_send(self, json_str)
@@ -452,6 +455,7 @@ function _M.http_send(self, json_str)
    return ok, err
 end
 
+-- test client’s configuration from CLI
 local function test_dsn(dsn)
    local rvn, err = _M.new(_M, dsn)
 
