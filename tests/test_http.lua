@@ -35,7 +35,8 @@ function setup()
 end
 
 function teardown()
-   server.sock:close()
+   -- socket has already been closed in http_responde
+   --server.sock:close()
 end
 
 function get_body(response)
@@ -57,7 +58,6 @@ function http_read(sock)
          content_len = len
       end
    end
-
    local res, err = sock:receive(content_len)
 
    if not res then
@@ -78,6 +78,7 @@ function test_capture_message()
          tags = { foo = "bar" }
       })
       local id = rvn:captureMessage("Sentry is a realtime event logging and aggregation platform.")
+      assert_not_nil(id)
       assert_not_nil(string_match(id, "%x+"))
       os_exit()
    else

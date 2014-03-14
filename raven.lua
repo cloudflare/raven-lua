@@ -44,6 +44,15 @@ if not ok then
     new_tab = function (narr, nrec) return {} end
 end
 
+local ok, clear_tab = pcall(require, "table.clear")
+if not ok then
+   clear_tab = function(tab)
+      for k, v in pairs(tab) do
+         tab[k] = nil
+      end
+   end
+end
+
 local function log(...)
    if not ngx then
       print(...)
@@ -61,8 +70,12 @@ local function errlog(...)
 end
 
 local _json = {
-     platform  = "lua",
-     logger    = "root",
+}
+
+local _exception = {
+   {
+
+   }
 }
 
 local _M = {}
@@ -195,6 +208,7 @@ function _M.new(self, dsn, conf)
 end
 
 function _M.captureException(self, exception, conf)
+   clear_tab(_json)
    _json.exception = exception
    return self:capture_core(_json, conf)
 end
@@ -205,6 +219,7 @@ end
 --   messsage: arbitrary message (most likely an error string)
 --
 function _M.captureMessage(self, message, conf)
+   clear_tab(_json)
    _json.message = message
    return self:capture_core(_json, conf)
 end
@@ -224,6 +239,8 @@ function _M.capture_core(self, json, conf)
    json.timestamp = iso8601()
    json.level     = self.level
    json.tags      = self.tags
+   json.platform  = "lua"
+   json.logger    = "root"
 
    if conf then
       if conf.tags then
@@ -238,8 +255,7 @@ function _M.capture_core(self, json, conf)
          json.level = conf.level
       end
    end
-   -- TODO
-   --tags      = tags,
+
    json.server_name = _get_server_name()
 
    local json_str = json_encode(json)
@@ -254,7 +270,7 @@ function _M.capture_core(self, json, conf)
 
    --print("sent")
    if not ok then
-      errlog("Failed to send to sentry: ", json_str)
+      errlog("Failed to send to sentry: ",err, " ",  json_str)
       return nil, err
    end
    return json.event_id
@@ -276,7 +292,8 @@ end
 --  tags: a table of tags to associate with the event being captured
 --        (expected to be key: value pairs)
 --
-function _M.capture(self, level, message, exception, culprit, tags)
+--[=[
+function _M.capture(self, level, message, culprit, tags)
 
    if self.project_id then
       local event_id = uuid4()
@@ -303,6 +320,7 @@ function _M.capture(self, level, message, exception, culprit, tags)
 
    return nil
 end
+]=]
 
 -- level 2 is the function which calls get_debug_info
 function _M.get_debug_info(level)
@@ -322,18 +340,23 @@ end
 
 -- catcher: used to catch an error from xpcall and send the
 -- information to Sentry
-function catcher(self, err)
+function _M.catcher(self, err)
    local culprit
    local stack
-   culprit, stack = get_debug_info()
+   culprit, stack = _M.get_debug_info()
    err = err .. "\n" .. stack
-   capture(self, self.levels[2], err, culprit, nil)
+
+   clear_tab(_exception[1])
+   _exception[1].value = err
+
+   self:captureException(_exception)
+   --capture(self, self.levels[2], err, culprit, nil)
 end
 
 -- call: call function f with parameters ... wrapped in a pcall and
 -- send any exception to Sentry. Returns a boolean indicating whether
 -- the function execution worked and an error if not
-function call(self, f, ...)
+function _M.call(self, f, ...)
    return xpcall(f,
                  function (err) self:catcher(err) end,
                 ...)
@@ -377,27 +400,7 @@ function _M.udp_send(self, json_str)
    return bytes, err
 end
 
--- http_send: actually sends the structured data to the Sentry server using
--- HTTP protocol
-function _M.http_send(self, json_str)
-   local ok, err
-   local sock
-
-   if not self.sock then
-      sock, err = socket.tcp()
-      if not sock then
-         return nil, err
-      end
-      self.sock = sock
-   end
-
-   ok, err = sock:connect(self.host, self.port)
-   if not ok then
-      return nil, err
-   end
-
-   local bytes
-
+function _M.http_send_core(self, json_str)
    local req = string_format(xsentryauth_http,
                                 self.request_uri,
                                 self.long_host,
@@ -408,8 +411,7 @@ function _M.http_send(self, json_str)
                                 self.public_key,
                                 self.secret_key,
                                 json_str)
-   --print(req)
-   bytes, err = self.sock:send(req)
+   local bytes, err = self.sock:send(req)
    if not bytes then
       return nil, err
    end
@@ -420,12 +422,34 @@ function _M.http_send(self, json_str)
    end
 
    local s1, s2, status = string_find(res, "HTTP/%d%.%d (%d%d%d) %w+")
-   if status and status == "200" then
-      return bytes
+   if status ~= "200" then
+      return nil, "Server response status not 200:" .. status
    end
 
    local s1, s2 = string_find(res, "\r\n\r\n")
-   return nil, string_sub(res, s2 + 1)
+   return string_sub(res, s2 + 1)
+end
+-- http_send: actually sends the structured data to the Sentry server using
+-- HTTP protocol
+function _M.http_send(self, json_str)
+   local ok, err
+   local sock
+
+   sock, err = socket.tcp()
+   if not sock then
+      return nil, err
+   end
+   self.sock = sock
+
+   ok, err = sock:connect(self.host, self.port)
+   if not ok then
+      return nil, err
+   end
+
+   ok, err = self:http_send_core(json_str)
+
+   sock:close()
+   return ok, err
 end
 
 local function test_dsn(dsn)
@@ -450,8 +474,20 @@ local function test_dsn(dsn)
       print("success!")
       print("Event id was '" .. id .. "'")
    else
+      print("failed to send message '" .. msg .. "'\n" .. tostring(err))
+   end
+
+   print("Send an exception...")
+   local exception = {{ value = "This is an exception from lua-raven."}}
+   local id, err = rvn:captureException(exception)
+
+   if id then
+      print("success!")
+      print("Event id was '" .. id .. "'")
+   else
       print("failed to send message '" .. msg .. "'\n" .. err)
    end
+   print("All done.")
 end
 
 if arg[1] and arg[1] == "test" then
