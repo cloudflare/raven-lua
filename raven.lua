@@ -29,6 +29,7 @@ local string_format  = string.format
 local string_match   = string.match
 local string_find    = string.find
 local string_sub     = string.sub
+local table_insert   = table.insert
 
 local socket
 if not ngx then
@@ -81,6 +82,8 @@ local mt = {
    __index = _M,
 }
 
+math.randomseed(os.time())
+
 -- hexrandom: returns a random number in hex with the specified number
 -- of digits
 local function hexrandom(digits)
@@ -115,6 +118,26 @@ end
 -- If ngx_lua is not used, returns "undefined"
 local function _get_server_name()
    return ngx and ngx.var.server_name or "undefined"
+end
+
+local function backtrace(level)
+   local frames = {}
+
+   while true do
+      local info = debug_getinfo(level, "Snl")
+      if not info then
+         break
+      end
+
+      table_insert(frames, 1, {
+         filename = info.short_src,
+         ["function"] = info.name,
+         lineno = info.currentline,
+      })
+      --print(json.encode(info))
+      level = level + 1
+   end
+   return { frames = frames }
 end
 
 -- _parse_host_port: parse long host ("127.0.0.1:2222")
@@ -206,7 +229,9 @@ end
 
 function _M.captureException(self, exception, conf)
    clear_tab(_json)
+   exception[1].stacktrace = backtrace(3)
    _json.exception = exception
+   _json.message = exception[1].value
    return self:capture_core(_json, conf)
 end
 
@@ -265,7 +290,7 @@ function _M.capture_core(self, json, conf)
       error("protocol not implemented yet: " .. self.protocol)
    end
 
-   --print("sent")
+   print("sent", json_str)
    if not ok then
       errlog("Failed to send to sentry: ",err, " ",  json_str)
       return nil, err
@@ -456,8 +481,8 @@ function _M.http_send(self, json_str)
 end
 
 -- test client’s configuration from CLI
-local function test_dsn(dsn)
-   local rvn, err = _M.new(_M, dsn)
+local function raven_test(dsn)
+   local rvn, err = _M.new(_M, dsn, { tags = { source = "CLI test DSN" }})
 
    if not rvn then
       print(err)
@@ -472,6 +497,7 @@ local function test_dsn(dsn)
 ]], rvn.server, rvn.project_id, rvn.public_key, rvn.secret_key))
    print("Send a message...")
    local msg = "Hello from lua-raven!"
+   --[[
    local id, err = rvn:captureMessage(msg)
 
    if id then
@@ -480,9 +506,14 @@ local function test_dsn(dsn)
    else
       print("failed to send message '" .. msg .. "'\n" .. tostring(err))
    end
-
+   ]]
    print("Send an exception...")
-   local exception = {{ value = "This is an exception from lua-raven."}}
+   --local exception = { ["module"] = "builtins", ["type"] = "Test", value = "This is an exception from lua-raven." .. os.time() }
+   local exception = {{
+     ["type"]= "SyntaxError",
+     ["value"]= "Wattttt!",
+     ["module"]= "__builtins__"
+   }}
    local id, err = rvn:captureException(exception)
 
    if id then
@@ -496,7 +527,7 @@ end
 
 if arg[1] and arg[1] == "test" then
    local dsn = arg[2]
-   test_dsn(dsn)
+   raven_test(dsn)
 end
 
 return _M

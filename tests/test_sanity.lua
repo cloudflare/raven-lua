@@ -1,5 +1,5 @@
 require "lunit"
-
+local cjson = require "cjson"
 local raven = require "raven"
 
 local string_match   = string.match
