@@ -228,8 +228,13 @@ function _M.new(self, dsn, conf)
 end
 
 function _M.captureException(self, exception, conf)
+   local trace_level = 3
+   if conf and conf.trace_level then
+      trace_level = conf.trace_level
+   end
+
    clear_tab(_json)
-   exception[1].stacktrace = backtrace(3)
+   exception[1].stacktrace = backtrace(trace_level)
    _json.exception = exception
    _json.message = exception[1].value
    return self:capture_core(_json, conf)
@@ -252,7 +257,12 @@ end
 --   json: json table to be sent. Don't need to fill event_id, culprit,
 --   timestamp and level, capture_core will fill these fileds for you.
 function _M.capture_core(self, json, conf)
-   local culprit, stack = self.get_debug_info(4)
+   local trace_level = 4
+   if conf and conf.trace_level then
+      trace_level = conf.trace_level + 1
+   end
+
+   local culprit, stack = self.get_debug_info(trace_level)
 
    local event_id = uuid4()
    --json.project   = self.project_id,
@@ -290,7 +300,7 @@ function _M.capture_core(self, json, conf)
       error("protocol not implemented yet: " .. self.protocol)
    end
 
-   print("sent", json_str)
+   --print("sent", json_str)
    if not ok then
       errlog("Failed to send to sentry: ",err, " ",  json_str)
       return nil, err
@@ -365,13 +375,13 @@ end
 function _M.catcher(self, err)
    local culprit
    local stack
-   culprit, stack = _M.get_debug_info()
-   err = err .. "\n" .. stack
+   --culprit, stack = _M.get_debug_info(3)
+   --err = err .. "\n" .. stack
 
    clear_tab(_exception[1])
    _exception[1].value = err
 
-   self:captureException(_exception)
+   self:captureException(_exception, { trace_level = 4 })
    --capture(self, self.levels[2], err, culprit, nil)
 end
 
@@ -412,12 +422,14 @@ function _M.udp_send(self, json_str)
    local bytes
 
    if self.sock then
-      bytes, err = self.sock:send(string_format(xsentryauth_udp,
+      local content = string_format(xsentryauth_udp,
                                    self.client_id,
                                    iso8601(),
                                    self.public_key,
                                    self.secret_key,
-                                   json_str))
+                                   json_str)
+      --print(content)
+      bytes, err = self.sock:send(content)
    end
    return bytes, err
 end
@@ -497,7 +509,6 @@ local function raven_test(dsn)
 ]], rvn.server, rvn.project_id, rvn.public_key, rvn.secret_key))
    print("Send a message...")
    local msg = "Hello from lua-raven!"
-   --[[
    local id, err = rvn:captureMessage(msg)
 
    if id then
@@ -506,7 +517,7 @@ local function raven_test(dsn)
    else
       print("failed to send message '" .. msg .. "'\n" .. tostring(err))
    end
-   ]]
+
    print("Send an exception...")
    --local exception = { ["module"] = "builtins", ["type"] = "Test", value = "This is an exception from lua-raven." .. os.time() }
    local exception = {{
