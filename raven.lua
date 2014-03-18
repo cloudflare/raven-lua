@@ -23,6 +23,7 @@
 local json = require("cjson")
 
 local ngx = ngx
+local arg = arg
 local setmetatable = setmetatable
 local tostring = tostring
 local xpcall = xpcall
