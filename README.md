@@ -1,4 +1,4 @@
-lua-raven
+raven-lua
 =========
 
 A small Lua interface to [Sentry](http://sentry.readthedocs.org/) that

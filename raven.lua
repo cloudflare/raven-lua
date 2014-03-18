@@ -235,7 +235,7 @@ function _M.new(self, dsn, conf)
       return nil, "Bad DSN"
    end
 
-   obj.client_id = "Lua Sentry Client/0.4"
+   obj.client_id = "raven-lua/0.4"
    -- default level "error"
    obj.level = "error"
 
@@ -559,7 +559,7 @@ local function raven_test(dsn)
   secret_key     : %s
 ]], rvn.server, rvn.project_id, rvn.public_key, rvn.secret_key))
    print("Send a message...")
-   local msg = "Hello from lua-raven!"
+   local msg = "Hello from raven-lua!"
    local id, err = rvn:captureMessage(msg)
 
    if id then
