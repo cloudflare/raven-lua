@@ -1,5 +1,6 @@
 -------------------------------------------------------------------
--- raven.lua: a Lua Raven client used to send errors to Sentry
+-- raven.lua: a Lua Raven client used to send errors to
+-- <a href="http://sentry.readthedocs.org/en/latest/index.html">Sentry</a>
 --
 -- According to client development guide
 --
