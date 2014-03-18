@@ -52,3 +52,4 @@ Synopsis
     local ok = rvn:call(bad_func, 1)
 
 ```
+
