@@ -32,12 +32,17 @@ local string_sub     = string.sub
 local table_insert   = table.insert
 
 local socket
+local catcher_trace_level
 if not ngx then
    local ok, luasocket = pcall(require, "socket")
    if not ok then
       error("No socket library found, you need ngx.socket or luasocket.")
    end
    socket = luasocket
+   catcher_trace_level = 3
+else
+   socket = ngx.socket
+   catcher_trace_level = 4
 end
 
 local ok, new_tab = pcall(require, "table.new")
@@ -123,6 +128,9 @@ end
 local function backtrace(level)
    local frames = {}
 
+   level = level + 1
+
+   --print("stacktrace level:", level)
    while true do
       local info = debug_getinfo(level, "Snl")
       if not info then
@@ -228,16 +236,26 @@ function _M.new(self, dsn, conf)
 end
 
 function _M.captureException(self, exception, conf)
-   local trace_level = 3
-   if conf and conf.trace_level then
-      trace_level = conf.trace_level
+   local trace_level
+   if not conf then
+      conf = { trace_level = 2 }
+   elseif not conf.trace_level then
+      conf.trace_level = 2
+   else
+      conf.trace_level = conf.trace_level + 1
    end
+
+   trace_level = conf.trace_level
 
    clear_tab(_json)
    exception[1].stacktrace = backtrace(trace_level)
    _json.exception = exception
    _json.message = exception[1].value
-   return self:capture_core(_json, conf)
+
+   -- because whether tail call will or will not appear in the stack back trace
+   -- is different between PUC-lua or LuaJIT, so just avoid tail call
+   local id, err = self:capture_core(_json, conf)
+   return id, err
 end
 
 -- captureMessage: capture an message and send it to sentry.
@@ -246,9 +264,19 @@ end
 --   messsage: arbitrary message (most likely an error string)
 --
 function _M.captureMessage(self, message, conf)
+   if not conf then
+      conf = { trace_level = 2 }
+   elseif not conf.trace_level then
+      conf.trace_level = 2
+   else
+      conf.trace_level = conf.trace_level + 1
+   end
+
    clear_tab(_json)
    _json.message = message
-   return self:capture_core(_json, conf)
+
+   local id, err = self:capture_core(_json, conf)
+   return id, err
 end
 
 -- capture_core: core capture function.
@@ -257,12 +285,9 @@ end
 --   json: json table to be sent. Don't need to fill event_id, culprit,
 --   timestamp and level, capture_core will fill these fileds for you.
 function _M.capture_core(self, json, conf)
-   local trace_level = 4
-   if conf and conf.trace_level then
-      trace_level = conf.trace_level + 1
-   end
+   conf.trace_level = conf.trace_level + 1
 
-   local culprit, stack = self.get_debug_info(trace_level)
+   local culprit = self.get_culprit(conf.trace_level)
 
    local event_id = uuid4()
    --json.project   = self.project_id,
@@ -354,20 +379,18 @@ function _M.capture(self, level, message, culprit, tags)
 end
 ]=]
 
--- level 2 is the function which calls get_debug_info
-function _M.get_debug_info(level)
-   local culprit = ''
-   local stack = ''
-   local level = level and level or 2
-   --print(json.encode(debug_getinfo(2, "Snl")))
+function _M.get_culprit(level)
+   local culprit
+
+   level = level + 1
+   --print("get_culprit level:", level, debug.traceback(1))
    local info = debug_getinfo(level, "Snl")
    if info.name then
       culprit = info.name
    else
       culprit = info.short_src .. ":" .. info.linedefined
    end
-   stack = debug.traceback("", 2)
-   return culprit, stack
+   return culprit
 end
 
 -- catcher: used to catch an error from xpcall and send the
@@ -381,7 +404,7 @@ function _M.catcher(self, err)
    clear_tab(_exception[1])
    _exception[1].value = err
 
-   self:captureException(_exception, { trace_level = 4 })
+   self:captureException(_exception, { trace_level = catcher_trace_level })
    --capture(self, self.levels[2], err, culprit, nil)
 end
 
@@ -428,7 +451,7 @@ function _M.udp_send(self, json_str)
                                    self.public_key,
                                    self.secret_key,
                                    json_str)
-      --print(content)
+      --print("udp send:", content)
       bytes, err = self.sock:send(content)
    end
    return bytes, err
@@ -536,7 +559,7 @@ local function raven_test(dsn)
    print("All done.")
 end
 
-if arg[1] and arg[1] == "test" then
+if arg and arg[1] and arg[1] == "test" then
    local dsn = arg[2]
    raven_test(dsn)
 end
