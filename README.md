@@ -52,4 +52,7 @@ Synopsis
     local ok = rvn:call(bad_func, 1)
 
 ```
+Documents
+=========
 
+See docs/index.html for more details.

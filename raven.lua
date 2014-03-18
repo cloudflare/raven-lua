@@ -1,17 +1,23 @@
--- Copyright (c) 2013, CloudFlare, Inc.
--- @author JGC <jgc@cloudflare.com>
--- @author Jiale Zhi <vipcalio@gmail.com>
+-------------------------------------------------------------------
 -- raven.lua: a Lua Raven client used to send errors to Sentry
 --
 -- According to client development guide
 --
 --    The following items are expected of production-ready clients:
+--    <ul>
+--    <li> DSN configuration √</li>
+--    <li> Graceful failures (e.g. Sentry server unreachable) √</li>
+--    <li> Scrubbing w/ processors</li>
+--    <li> Tag support √</li>
+--    </ul>
 --
---    √ DSN configuration
---    √ Graceful failures (e.g. Sentry server unreachable)
---    Scrubbing w/ processors
---    √ Tag support
+-- To test a DSN configuration:
+-- <pre>$ lua raven.lua test [DSN]</pre>
 --
+-- @author JGC <jgc@cloudflare.com>
+-- @author Jiale Zhi <vipcalio@gmail.com>
+-- @copyright (c) 2013-2014, CloudFlare, Inc.
+--------------------------------------------------------------------
 
 local json = require("cjson")
 
@@ -201,11 +207,21 @@ function _M._parse_dsn(dsn, obj)
    end
 end
 
--- new: creates a new Sentry client. Two parameters:
---
--- dsn:    The DSN of the Sentry instance with this format:
---         {PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}
---         This implementation only supports UDP
+--- Create a new Sentry client. Two parameters:
+-- @param self raven client
+-- @param dsn  The DSN of the Sentry instance with this format:
+--             <pre>{PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}</pre>
+--             Both HTTP protocol and UDP protocol are supported. For example:
+--             <pre>http://pub:secret@127.0.0.1:8080/sentry/proj-id</pre>
+--             <pre>udp://pub:secret@127.0.0.1:8080/sentry/proj-id</pre>
+-- @param conf client configuration. Conf should be a hash table. Possiable
+--             keys are: "tags", "logger". For example:
+--             <pre>{ tags = { foo = "bar", abc = "def" }, logger = "myLogger" }</pre>
+-- @return     a new raven instance
+-- @usage
+-- local raven = require "raven"
+-- local rvn = raven:new(dsn, { tags = { foo = "bar", abc = "def" },
+--     logger = "myLogger" })
 function _M.new(self, dsn, conf)
    if not dsn then
       return nil, "empty dsn"
@@ -235,6 +251,37 @@ function _M.new(self, dsn, conf)
    return setmetatable(obj, mt)
 end
 
+--- Send an exception to sentry.
+-- see <a href="http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Exception">reference</a>.
+--
+-- @param self       raven client
+-- @param exception  a hash table describing an exception. For example:
+-- <pre>{{
+--     ["type"] = "SyntaxError",
+--     ["value"] = "Wattttt!",
+--     ["module"] = "__builtins__",
+--     stacktrace = {
+--         frames = {
+--             { filename = "/real/file/name", func = "myfunc", lineno" = 3 },
+--             { filename = "/real/file/name", func = "myfunc1", lineno" = 10 },
+--         }
+--     }
+-- }}</pre>
+--
+-- @param conf       capture configuration. Conf should be a hash table.
+--                   Possiable keys are: "tags", "trace_level". "tags" will be
+--                   send to sentry together with "tags" in client
+--                   configuration. "trace_level" is used for geting stack
+--                   backtracing. You shouldn't pass this argument unless you
+--                   know what you are doing.
+-- @return           On success, return event id. If not success, return nil and
+--                   an error string.
+-- @usage
+-- local raven = require "raven"
+-- local rvn = raven:new(dsn, { tags = { foo = "bar", abc = "def" },
+--     logger = "myLogger" })
+-- local id, err = rvn:captureException(exception,
+--     { tags = { foo = "bar", abc = "def" }})
 function _M.captureException(self, exception, conf)
    local trace_level
    if not conf then
@@ -258,11 +305,24 @@ function _M.captureException(self, exception, conf)
    return id, err
 end
 
--- captureMessage: capture an message and send it to sentry.
+--- Send a message to sentry.
 --
--- Parameters:
---   messsage: arbitrary message (most likely an error string)
---
+-- @param self       raven client
+-- @param message    arbitrary message (most likely an error string)
+-- @param conf       capture configuration. Conf should be a hash table.
+--                   Possiable keys are: "tags", "trace_level". "tags" will be
+--                   send to sentry together with "tags" in client
+--                   configuration. "trace_level" is used for geting stack
+--                   backtracing. You shouldn't pass this argument unless you
+--                   know what you are doing.
+-- @return           On success, return event id. If not success, return nil and
+--                   error string.
+-- @usage
+-- local raven = require "raven"
+-- local rvn = raven:new(dsn, { tags = { foo = "bar", abc = "def" },
+--     logger = "myLogger" })
+-- local id, err = rvn:captureMessage("Sample message",
+--     { tags = { foo = "bar", abc = "def" }})
 function _M.captureMessage(self, message, conf)
    if not conf then
       conf = { trace_level = 2 }
@@ -333,52 +393,7 @@ function _M.capture_core(self, json, conf)
    return json.event_id
 end
 
--- capture: capture an error that has occurred and send it to
--- sentry. Returns the ID of the report or nil if an error occurred.
---
--- Parameters:
---
---  level: a string representing a severity should be drawn from the
---         levels array above
---
---  message: arbitrary message (most likely an error string)
---
---  cuplrit: typically the name of the function call that caused the
---           event (or alternatively the name of the module)
---
---  tags: a table of tags to associate with the event being captured
---        (expected to be key: value pairs)
---
---[=[
-function _M.capture(self, level, message, culprit, tags)
-
-   if self.project_id then
-      local event_id = uuid4()
-
-      send(self, {
-              project   = self.project_id,
-              event_id  = event_id,
-              timestamp = iso8601(),
-              culprit   = culprit,
-              level     = level,
-              message   = message,
-              tags      = tags,
-              server_name = ngx.var.server_name,
-              platform  = "lua",
---[[
-              logger
-              modules
-              extra
-]]
-      })
-
-      return event_id
-   end
-
-   return nil
-end
-]=]
-
+-- get culprit using given level
 function _M.get_culprit(level)
    local culprit
 
@@ -408,18 +423,29 @@ function _M.catcher(self, err)
    --capture(self, self.levels[2], err, culprit, nil)
 end
 
--- call: call function f with parameters ... wrapped in a pcall and
+--- Call function f with parameters ... wrapped in a xpcall and
 -- send any exception to Sentry. Returns a boolean indicating whether
 -- the function execution worked and an error if not
+-- @param self  raven client
+-- @param f     function to be called
+-- @param ...   function "f" 's arguments
+-- @return      "f" 's return value(s)
+-- @usage
+-- function func(a, b, c)
+--     return a * b + c
+-- end
+-- return rvn:call(func, a, b, c)
 function _M.call(self, f, ...)
    return xpcall(f,
                  function (err) self:catcher(err) end,
                 ...)
 end
 
+-- UDP request template
 local xsentryauth_udp="Sentry sentry_version=2.0,sentry_client=%s,"
       .. "sentry_timestamp=%s,sentry_key=%s,sentry_secret=%s\n\n%s\n"
 
+-- HTTP request template
 local xsentryauth_http = "POST %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: %d\r\nUser-Agent: %s\r\nX-Sentry-Auth: Sentry sentry_version=5, sentry_client=%s, sentry_timestamp=%s, sentry_key=%s, sentry_secret=%s\r\n\r\n%s"
 
 -- udp_send: actually sends the structured data to the Sentry server using
@@ -542,11 +568,10 @@ local function raven_test(dsn)
    end
 
    print("Send an exception...")
-   --local exception = { ["module"] = "builtins", ["type"] = "Test", value = "This is an exception from lua-raven." .. os.time() }
    local exception = {{
-     ["type"]= "SyntaxError",
-     ["value"]= "Wattttt!",
-     ["module"]= "__builtins__"
+     ["type"] = "SyntaxError",
+     ["value"] = "Wattttt!",
+     ["module"] = "__builtins__"
    }}
    local id, err = rvn:captureException(exception)
 
