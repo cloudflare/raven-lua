@@ -16,7 +16,7 @@ local dsn_udp = "udp://pub:secret@127.0.0.1:" .. port .. "/sentry/proj-id"
 
 function test_capture_message_connection_refused_http()
    local rvn = raven:new(dsn_http)
-   local id, err = rvn:captureMessage("Sentry is a realtime event logging and aggregation platform.")
+   local id, err = rvn:captureMessage("IF YOU ARE READING THIS IT IS CORRECT; THIS TEST SHOULD GENERATE AN ERROR.")
 
    assert_nil(id)
    assert_equal("connection refused", err)
