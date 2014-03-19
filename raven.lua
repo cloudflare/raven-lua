@@ -67,7 +67,6 @@ if not ok then
    end
 end
 
-
 local function log(...)
    if not ngx then
       print(...)
@@ -138,7 +137,6 @@ local function backtrace(level)
 
    level = level + 1
 
-   --print("stacktrace level:", level)
    while true do
       local info = debug_getinfo(level, "Snl")
       if not info then
@@ -150,7 +148,7 @@ local function backtrace(level)
          ["function"] = info.name,
          lineno = info.currentline,
       })
-      --print(json.encode(info))
+
       level = level + 1
    end
    return { frames = frames }
@@ -204,9 +202,9 @@ function _M._parse_dsn(dsn, obj)
       obj.server = obj.protocol .. "://" .. obj.long_host .. obj.request_uri
 
       return obj
-   else
-      return nil
-   end
+   end   
+
+   return nil
 end
 
 --- Create a new Sentry client. Two parameters:
@@ -249,7 +247,6 @@ function _M.new(self, dsn, conf)
       end
    end
 
-   -- log("new raven client, DSN: " .. dsn)
    return setmetatable(obj, mt)
 end
 
@@ -345,7 +342,7 @@ end
 --
 -- Parameters:
 --   json: json table to be sent. Don't need to fill event_id, culprit,
---   timestamp and level, capture_core will fill these fileds for you.
+--   timestamp and level, capture_core will fill these fields for you.
 function _M.capture_core(self, json, conf)
    conf.trace_level = conf.trace_level + 1
 
@@ -387,7 +384,6 @@ function _M.capture_core(self, json, conf)
       error("protocol not implemented yet: " .. self.protocol)
    end
 
-   --print("sent", json_str)
    if not ok then
       errlog("Failed to send to sentry: ",err, " ",  json_str)
       return nil, err
@@ -400,7 +396,6 @@ function _M.get_culprit(level)
    local culprit
 
    level = level + 1
-   --print("get_culprit level:", level, debug.traceback(1))
    local info = debug_getinfo(level, "Snl")
    if info.name then
       culprit = info.name
@@ -415,14 +410,11 @@ end
 function _M.catcher(self, err)
    local culprit
    local stack
-   --culprit, stack = _M.get_debug_info(3)
-   --err = err .. "\n" .. stack
 
    clear_tab(_exception[1])
    _exception[1].value = err
 
    self:captureException(_exception, { trace_level = catcher_trace_level })
-   --capture(self, self.levels[2], err, culprit, nil)
 end
 
 --- Call function f with parameters ... wrapped in a xpcall and
@@ -459,9 +451,6 @@ function _M.udp_send(self, json_str)
       local sock = socket.udp()
 
       if sock then
-
-         -- TODO: Don't ignore the error on the setpeername here
-
          ok, err = sock:setpeername(self.host, self.port)
          if not ok then
             return nil, err
@@ -479,7 +468,6 @@ function _M.udp_send(self, json_str)
                                    self.public_key,
                                    self.secret_key,
                                    json_str)
-      --print("udp send:", content)
       bytes, err = self.sock:send(content)
    end
    return bytes, err
