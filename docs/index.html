@@ -72,11 +72,11 @@
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#captureException">captureException (self, exception, conf)</a></td>
-	<td class="summary">Send an exception to sentry.</td>
+	<td class="summary">Send an exception to Sentry.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#captureMessage">captureMessage (self, message, conf)</a></td>
-	<td class="summary">Send a message to sentry.</td>
+	<td class="summary">Send a message to Sentry.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#call">call (self, f, ...)</a></td>
@@ -95,7 +95,7 @@
     <strong>new (self, dsn, conf)</strong>
     </dt>
     <dd>
-    Create a new Sentry client.  Two parameters:
+    Create a new Sentry client.  Three parameters:
 
 
     <h3>Parameters:</h3>
@@ -139,7 +139,7 @@
     <strong>captureException (self, exception, conf)</strong>
     </dt>
     <dd>
-    Send an exception to sentry.
+    Send an exception to Sentry.
  see <a href="http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Exception">reference</a>.
 
 
@@ -166,8 +166,8 @@
         </li>
         <li><span class="parameter">conf</span>
                capture configuration. Conf should be a hash table.
-                   Possiable keys are: "tags", "trace_level". "tags" will be
-                   send to sentry together with "tags" in client
+                   Possible keys are: "tags", "trace_level". "tags" will be
+                   send to Sentry together with "tags" in client
                    configuration. "trace_level" is used for geting stack
                    backtracing. You shouldn't pass this argument unless you
                    know what you are doing.
@@ -199,7 +199,7 @@
     <strong>captureMessage (self, message, conf)</strong>
     </dt>
     <dd>
-    Send a message to sentry.
+    Send a message to Sentry.
 
 
     <h3>Parameters:</h3>
@@ -213,7 +213,7 @@
         <li><span class="parameter">conf</span>
                capture configuration. Conf should be a hash table.
                    Possiable keys are: "tags", "trace_level". "tags" will be
-                   send to sentry together with "tags" in client
+                   send to Sentry together with "tags" in client
                    configuration. "trace_level" is used for geting stack
                    backtracing. You shouldn't pass this argument unless you
                    know what you are doing.
