@@ -75,7 +75,7 @@ local function log(...)
    end
 end
 
--- backup logging when cannot send data to sentry
+-- backup logging when cannot send data to Sentry
 local function errlog(...)
    if not ngx then
       print("[ERROR]", ...)
@@ -94,7 +94,7 @@ local mt = {
    __index = _M,
 }
 
-math.randomseed(os.time())
+math.randomseed(os_time())
 
 -- hexrandom: returns a random number in hex with the specified number
 -- of digits
@@ -204,10 +204,10 @@ function _M._parse_dsn(dsn, obj)
       return obj
    end   
 
-   return nil
+   return nil, "failed to parse DSN string"
 end
 
---- Create a new Sentry client. Two parameters:
+--- Create a new Sentry client. Three parameters:
 -- @param self raven client
 -- @param dsn  The DSN of the Sentry instance with this format:
 --             <pre>{PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}</pre>
@@ -250,7 +250,7 @@ function _M.new(self, dsn, conf)
    return setmetatable(obj, mt)
 end
 
---- Send an exception to sentry.
+--- Send an exception to Sentry.
 -- see <a href="http://sentry.readthedocs.org/en/latest/developer/interfaces/index.html#sentry.interfaces.Exception">reference</a>.
 --
 -- @param self       raven client
@@ -268,8 +268,8 @@ end
 -- }}</pre>
 --
 -- @param conf       capture configuration. Conf should be a hash table.
---                   Possiable keys are: "tags", "trace_level". "tags" will be
---                   send to sentry together with "tags" in client
+--                   Possible keys are: "tags", "trace_level". "tags" will be
+--                   send to Sentry together with "tags" in client
 --                   configuration. "trace_level" is used for geting stack
 --                   backtracing. You shouldn't pass this argument unless you
 --                   know what you are doing.
@@ -304,13 +304,13 @@ function _M.captureException(self, exception, conf)
    return id, err
 end
 
---- Send a message to sentry.
+--- Send a message to Sentry.
 --
 -- @param self       raven client
 -- @param message    arbitrary message (most likely an error string)
 -- @param conf       capture configuration. Conf should be a hash table.
 --                   Possiable keys are: "tags", "trace_level". "tags" will be
---                   send to sentry together with "tags" in client
+--                   send to Sentry together with "tags" in client
 --                   configuration. "trace_level" is used for geting stack
 --                   backtracing. You shouldn't pass this argument unless you
 --                   know what you are doing.
@@ -349,7 +349,10 @@ function _M.capture_core(self, json, conf)
    local culprit = self.get_culprit(conf.trace_level)
 
    local event_id = uuid4()
+
+   -- TODO: Why is this line commented out?
    --json.project   = self.project_id,
+
    json.event_id  = event_id
    json.culprit   = culprit
    json.timestamp = iso8601()
@@ -385,7 +388,7 @@ function _M.capture_core(self, json, conf)
    end
 
    if not ok then
-      errlog("Failed to send to sentry: ",err, " ",  json_str)
+      errlog("Failed to send to Sentry: ",err, " ",  json_str)
       return nil, err
    end
    return json.event_id
@@ -443,7 +446,7 @@ local xsentryauth_udp="Sentry sentry_version=2.0,sentry_client=%s,"
 local xsentryauth_http = "POST %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: %d\r\nUser-Agent: %s\r\nX-Sentry-Auth: Sentry sentry_version=5, sentry_client=%s, sentry_timestamp=%s, sentry_key=%s, sentry_secret=%s\r\n\r\n%s"
 
 -- udp_send: actually sends the structured data to the Sentry server using
--- UDP protocol
+-- UDP
 function _M.udp_send(self, json_str)
    local ok, err
 
@@ -473,8 +476,8 @@ function _M.udp_send(self, json_str)
    return bytes, err
 end
 
--- http_send_core: do the actual network send work. Expect an already
--- connected socket
+-- http_send_core: do the actual network send. Expects an already
+-- connected socket.
 function _M.http_send_core(self, json_str)
    local req = string_format(xsentryauth_http,
                                 self.request_uri,
@@ -509,7 +512,7 @@ function _M.http_send_core(self, json_str)
 end
 
 -- http_send: actually sends the structured data to the Sentry server using
--- HTTP protocol
+-- HTTP
 function _M.http_send(self, json_str)
    local ok, err
    local sock
