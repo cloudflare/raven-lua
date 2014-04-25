@@ -60,7 +60,11 @@ See docs/index.html for more details.
 Prerequisites
 =============
 ```
-    $luarocks install lunit luaposix       #for unit tests
-    $luarocks install ldoc                 #for generating docs
+    #for unit tests
+    $luarocks install lunit
+    $luarocks install luaposix
+
+    #for generating docs
+    $luarocks install ldoc
 ```
 
