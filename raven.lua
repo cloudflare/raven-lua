@@ -19,7 +19,7 @@
 -- @author Jiale Zhi <vipcalio@gmail.com>
 -- @copyright (c) 2013-2014, CloudFlare, Inc.
 --------------------------------------------------------------------
-
+--pcall(require("luacov"))
 local json = require("cjson")
 
 local ngx = ngx
@@ -42,7 +42,7 @@ local table_insert   = table.insert
 local debug = false
 
 local socket
-local catcher_trace_level = 3
+local catcher_trace_level = 4
 if not ngx then
    local ok, luasocket = pcall(require, "socket")
    if not ok then
@@ -202,7 +202,7 @@ function _M._parse_dsn(dsn, obj)
       obj.server = obj.protocol .. "://" .. obj.long_host .. obj.request_uri
 
       return obj
-   end   
+   end
 
    return nil, "failed to parse DSN string"
 end
@@ -229,8 +229,9 @@ function _M.new(self, dsn, conf)
 
    local obj = {}
 
-   if not _M._parse_dsn(dsn, obj) then
-      return nil, "Bad DSN"
+   local ok, err = _M._parse_dsn(dsn, obj)
+   if not ok then
+      return nil, err
    end
 
    obj.client_id = "raven-lua/0.4"
@@ -388,7 +389,7 @@ function _M.capture_core(self, json, conf)
    end
 
    if not ok then
-      errlog("Failed to send to Sentry: ",err, " ",  json_str)
+      errlog("Failed to send to Sentry: ", err, " ",  json_str)
       return nil, err
    end
    return json.event_id
@@ -447,7 +448,14 @@ function _M.call(self, f, ...)
    -- move all the network operations outside of the xpcall error handler.
    local json_exception
    local res = { xpcall(f,
-                 function (err) json_exception = self:catcher(err) end,
+                 function (err)
+                     local ok
+                     ok, json_exception = pcall(self.catcher, self, err)
+                     if not ok then
+                         -- when failed, json_exception is error message
+                         errlog(json_excdption)
+                     end
+                 end,
                 ...) }
    if json_exception then
        self:capture_core(json_exception)

@@ -30,8 +30,30 @@ function test_new()
    -- missing public key in DSN
    local rvn1, msg = raven:new("https://secret@example.com/sentry/project-id")
    assert_nil(rvn1)
-   assert_equal("Bad DSN", msg)
+   assert_equal("failed to parse DSN string", msg)
 end
+
+function test_new1()
+   local rvn, msg = raven:new()
+   assert_nil(rvn)
+   assert_equal("empty dsn", msg)
+end
+
+function test_new2()
+   local rvn, msg = raven:new("https://public:secret@example.com/sentry/project-id", { tags = { foo = "bar", abc = "def" }, logger = "myLogger" })
+   assert_not_nil(rvn)
+   assert_equal("raven-lua/0.4", rvn.client_id)
+   assert_equal("myLogger", rvn.logger)
+   assert_equal("bar", rvn.tags[1].foo)
+   assert_equal("def", rvn.tags[1].abc)
+end
+
+function test_new3()
+   local rvn, msg = raven:new("https://public:secret@example.com:abcd/sentry/project-id")
+   assert_nil(rvn)
+   assert_equal("illegal port: abcd", msg)
+end
+
 
 function test_parse_host_port()
    local host, port = raven._parse_host_port("http", "127.0.0.1:29999")
@@ -45,7 +67,7 @@ function test_parse_host_port1()
    assert_equal(80, port)
 end
 
-function test_parse_host_port1()
+function test_parse_host_port2()
    local host, port, err = raven._parse_host_port("http", "somehost.com:abcd")
    assert_nil(host)
    assert_nil(port)
