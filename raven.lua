@@ -39,18 +39,18 @@ local string_find    = string.find
 local string_sub     = string.sub
 local table_insert   = table.insert
 
+local debug = false
+
 local socket
-local catcher_trace_level
+local catcher_trace_level = 3
 if not ngx then
    local ok, luasocket = pcall(require, "socket")
    if not ok then
       error("No socket library found, you need ngx.socket or luasocket.")
    end
    socket = luasocket
-   catcher_trace_level = 3
 else
    socket = ngx.socket
-   catcher_trace_level = 4
 end
 
 local ok, new_tab = pcall(require, "table.new")
@@ -411,13 +411,22 @@ end
 -- catcher: used to catch an error from xpcall and send the
 -- information to Sentry
 function _M.catcher(self, err)
-   local culprit
-   local stack
+   if debug then
+       log("catch: ", err)
+   end
 
    clear_tab(_exception[1])
    _exception[1].value = err
+   _exception[1].stacktrace = backtrace(catcher_trace_level)
 
-   self:captureException(_exception, { trace_level = catcher_trace_level })
+   clear_tab(_json)
+   _json.exception = _exception
+   _json.message = _exception[1].value
+
+   _json.culprit = self.get_culprit(catcher_trace_level)
+
+
+   return _json
 end
 
 --- Call function f with parameters ... wrapped in a xpcall and
@@ -426,16 +435,25 @@ end
 -- @param self  raven client
 -- @param f     function to be called
 -- @param ...   function "f" 's arguments
--- @return      "f" 's return value(s)
+-- @return      the same with xpcall
 -- @usage
 -- function func(a, b, c)
 --     return a * b + c
 -- end
 -- return rvn:call(func, a, b, c)
 function _M.call(self, f, ...)
-   return xpcall(f,
-                 function (err) self:catcher(err) end,
-                ...)
+   -- When used with ngx_lua, connecting a tcp socket in xpcall error handler
+   -- will cause a "yield across C-call boundary" error. To avoid this, we
+   -- move all the network operations outside of the xpcall error handler.
+   local json_exception
+   local res = { xpcall(f,
+                 function (err) json_exception = self:catcher(err) end,
+                ...) }
+   if json_exception then
+       self:capture_core(json_exception)
+   end
+
+   return unpack(res)
 end
 
 -- UDP request template

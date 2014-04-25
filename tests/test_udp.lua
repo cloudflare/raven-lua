@@ -87,7 +87,6 @@ function test_capture_message_with_tags1()
    assert_equal("bar", json.tags[1].foo)
    assert_equal("def", json.tags[2].abc)
 end
-
 function test_capture_message_with_level()
    local rvn = raven:new(dsn)
    local id = rvn:captureMessage("Sentry is a realtime event logging and aggregation platform.", { level = "info" })
