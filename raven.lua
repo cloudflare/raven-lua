@@ -298,6 +298,9 @@ function _M.captureException(self, exception, conf)
    _json.exception = exception
    _json.message = exception[1].value
 
+   _json.culprit = self.get_culprit(conf.trace_level)
+
+
    -- because whether tail call will or will not appear in the stack back trace
    -- is different between PUC-lua or LuaJIT, so just avoid tail call
    local id, err = self:capture_core(_json, conf)
@@ -334,6 +337,8 @@ function _M.captureMessage(self, message, conf)
    clear_tab(_json)
    _json.message = message
 
+   _json.culprit = self.get_culprit(conf.trace_level)
+
    local id, err = self:capture_core(_json, conf)
    return id, err
 end
@@ -344,17 +349,12 @@ end
 --   json: json table to be sent. Don't need to fill event_id, culprit,
 --   timestamp and level, capture_core will fill these fields for you.
 function _M.capture_core(self, json, conf)
-   conf.trace_level = conf.trace_level + 1
-
-   local culprit = self.get_culprit(conf.trace_level)
-
    local event_id = uuid4()
 
    -- TODO: Why is this line commented out?
    --json.project   = self.project_id,
 
    json.event_id  = event_id
-   json.culprit   = culprit
    json.timestamp = iso8601()
    json.level     = self.level
    json.tags      = self.tags
