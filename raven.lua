@@ -156,7 +156,7 @@ end
 
 -- _parse_host_port: parse long host ("127.0.0.1:2222")
 -- to host ("127.0.0.1") and port (2222)
-function _M._parse_host_port(protocol, host)
+local function _parse_host_port(protocol, host)
    local i = string_find(host, ":")
    if not i then
       -- TODO
@@ -171,10 +171,11 @@ function _M._parse_host_port(protocol, host)
 
    return string_sub(host, 1, i - 1), port
 end
+_M._parse_host_port = _parse_host_port
 
 -- _parse_dsn: gets protocol, public_key, secret_key, host, port, path and
 -- project from DSN
-function _M._parse_dsn(dsn, obj)
+local function _parse_dsn(dsn, obj)
    if not obj then
       obj = {}
    end
@@ -189,7 +190,7 @@ function _M._parse_dsn(dsn, obj)
    if obj.protocol and obj.public_key and obj.secret_key and obj.long_host
          and obj.project_id then
 
-      local host, port, err = _M._parse_host_port(obj.protocol, obj.long_host)
+      local host, port, err = _parse_host_port(obj.protocol, obj.long_host)
 
       if not host or not port then
          return nil, err
@@ -206,6 +207,7 @@ function _M._parse_dsn(dsn, obj)
 
    return nil, "failed to parse DSN string"
 end
+_M._parse_dsn = _parse_dsn
 
 --- Create a new Sentry client. Three parameters:
 -- @param self raven client
@@ -229,7 +231,7 @@ function _M.new(self, dsn, conf)
 
    local obj = {}
 
-   local ok, err = _M._parse_dsn(dsn, obj)
+   local ok, err = _parse_dsn(dsn, obj)
    if not ok then
       return nil, err
    end
