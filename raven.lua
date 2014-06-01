@@ -455,7 +455,7 @@ function _M.call(self, f, ...)
                      ok, json_exception = pcall(self.catcher, self, err)
                      if not ok then
                          -- when failed, json_exception is error message
-                         errlog(json_excdption)
+                         errlog(json_exception)
                      end
                  end,
                 ...) }
