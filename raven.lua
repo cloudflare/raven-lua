@@ -21,6 +21,7 @@
 --------------------------------------------------------------------
 --pcall(require("luacov"))
 local json = require("cjson")
+local debug = require("debug")
 
 local ngx = ngx
 local arg = arg
@@ -306,7 +307,7 @@ function _M.captureException(self, exception, conf)
 
    -- because whether tail call will or will not appear in the stack back trace
    -- is different between PUC-lua or LuaJIT, so just avoid tail call
-   local id, err = self:capture_core(_json, conf)
+   local id, err = self:send_report(_json, conf)
    return id, err
 end
 
@@ -342,20 +343,27 @@ function _M.captureMessage(self, message, conf)
 
    _json.culprit = self.get_culprit(conf.trace_level)
 
-   local id, err = self:capture_core(_json, conf)
+   local id, err = self:send_report(_json, conf)
    return id, err
 end
 
--- capture_core: core capture function.
+-- send_report: send report for the captured error.
 --
 -- Parameters:
 --   json: json table to be sent. Don't need to fill event_id, culprit,
---   timestamp and level, capture_core will fill these fields for you.
-function _M.capture_core(self, json, conf)
+--   timestamp and level, send_report will fill these fields for you.
+function _M.send_report(self, json, conf)
    local event_id = uuid4()
 
    -- TODO: Why is this line commented out?
    --json.project   = self.project_id,
+
+   if not json then
+      json = self.json
+      if not json then
+         return
+      end
+   end
 
    json.event_id  = event_id
    json.timestamp = iso8601()
@@ -411,8 +419,7 @@ function _M.get_culprit(level)
    return culprit
 end
 
--- catcher: used to catch an error from xpcall and send the
--- information to Sentry
+-- catcher: used to catch an error from xpcall.
 function _M.catcher(self, err)
    if debug then
        log("catch: ", err)
@@ -427,7 +434,6 @@ function _M.catcher(self, err)
    _json.message = _exception[1].value
 
    _json.culprit = self.get_culprit(catcher_trace_level)
-
 
    return _json
 end
@@ -457,13 +463,28 @@ function _M.call(self, f, ...)
                          -- when failed, json_exception is error message
                          errlog(json_exception)
                      end
+                     return err
                  end,
                 ...) }
    if json_exception then
-       self:capture_core(json_exception)
+       self:send_report(json_exception)
    end
 
    return unpack(res)
+end
+
+function _M.gen_capture_err(self)
+   return function (err)
+      local ok, json_exception = pcall(self.catcher, self, err)
+      if not ok then
+         -- when failed, json_exception is error message
+         errlog(json_exception)
+         self.json = nil
+      else
+         self.json = json_exception
+      end
+      return err
+   end
 end
 
 -- UDP request template
@@ -529,7 +550,7 @@ function _M.http_send_core(self, json_str)
 
    local s1, s2, status = string_find(res, "HTTP/%d%.%d (%d%d%d) %w+")
    if status ~= "200" then
-      return nil, "Server response status not 200:" .. status
+      return nil, "Server response status not 200:" .. (status or "nil")
    end
 
    local s1, s2 = string_find(res, "\r\n\r\n")
