@@ -43,11 +43,16 @@ local table_insert   = table.insert
 local debug = false
 
 local socket
+local ssl
 local catcher_trace_level = 4
 if not ngx then
    local ok, luasocket = pcall(require, "socket")
    if not ok then
       error("No socket library found, you need ngx.socket or luasocket.")
+   end
+   local ok, luassl = pcall(require, "ssl")
+   if ok then
+      ssl = luassl
    end
    socket = luasocket
 else
@@ -161,7 +166,7 @@ local function _parse_host_port(protocol, host)
    local i = string_find(host, ":")
    if not i then
       -- TODO
-      return host, 80
+      return host, nil
    end
 
    local port_str = string_sub(host, i + 1)
@@ -193,7 +198,7 @@ local function _parse_dsn(dsn, obj)
 
       local host, port, err = _parse_host_port(obj.protocol, obj.long_host)
 
-      if not host or not port then
+      if not host then
          return nil, err
       end
 
@@ -388,8 +393,10 @@ function _M.send_report(self, json, conf)
 
    local json_str = json_encode(json)
    local ok, err
-   if self.protocol == "http" then
-      ok, err = self:http_send(json_str)
+   if self.protocol == "https" then
+      ok, err = self:http_send(json_str, true)
+   elseif self.protocol == "http" then
+      ok, err = self:http_send(json_str, false)
    else
       error("protocol not implemented yet: " .. self.protocol)
    end
@@ -521,22 +528,83 @@ function _M.http_send_core(self, json_str)
    return string_sub(res, s2 + 1)
 end
 
+-- lua_wrap_tls: Enables TLS for luasocket. Requires luasec.
+function _M.lua_wrap_tls(self, sock)
+   if not ssl then
+      error("no ssl library found, please install luasec")
+   end
+
+   local ok, err
+
+   sock, err = ssl.wrap(sock, {
+      mode = "client",
+      protocol = "tlsv1",
+      verify = "peer",
+      options = "all",
+   })
+   if not sock then
+      return nil, err
+   end
+
+   ok, err = sock:dohandshake()
+   if not ok then
+      return nil, err
+   end
+
+   return sock
+end
+
+-- ngx_wrap_tls: Enables TLS for ngx.socket
+function _M.ngx_wrap_tls(self, sock)
+   local session, err = sock:sslhandshake(false, self.host, true)
+   if not session then
+      return nil, err
+   end
+   return sock
+end
+
+-- wrap_tls: Wraps a connected socket with TLS
+function _M.wrap_tls(self, sock)
+   if ngx then
+      return self:ngx_wrap_tls(sock)
+   end
+   return self:lua_wrap_tls(sock)
+end
+
 -- http_send: actually sends the structured data to the Sentry server using
--- HTTP
-function _M.http_send(self, json_str)
+-- HTTP or HTTPS
+function _M.http_send(self, json_str, secure)
    local ok, err
    local sock
+   local port = self.port
 
    sock, err = socket.tcp()
    if not sock then
       return nil, err
    end
-   self.sock = sock
 
-   ok, err = sock:connect(self.host, self.port)
+   -- Rely on default port values for http and https
+   if not port then
+      port = secure and 443 or 80
+   end
+
+   ok, err = sock:connect(self.host, port)
    if not ok then
       return nil, err
    end
+
+   if secure then
+      -- Sprinkle on some TLS juice
+      local tlssock, err = self:wrap_tls(sock)
+      if not tlssock then
+         -- Need to close the tcp connection yet before bailing
+         sock:close()
+         return nil, err
+      end
+      sock = tlssock
+   end
+
+   self.sock = sock
 
    ok, err = self:http_send_core(json_str)
 
