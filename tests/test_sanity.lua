@@ -14,7 +14,7 @@ function test_parse_dsn()
    assert_equal("public", obj.public_key)
    assert_equal("secret", obj.secret_key)
    assert_equal("example.com", obj.host)
-   assert_equal(80, obj.port)
+   assert_equal(nil, obj.port)
    assert_equal("/sentry/", obj.path)
    assert_equal("project-id", obj.project_id)
    assert_equal("/sentry/api/project-id/store/", obj.request_uri)
@@ -64,7 +64,7 @@ end
 function test_parse_host_port1()
    local host, port = raven._parse_host_port("http", "somehost.com")
    assert_equal("somehost.com", host)
-   assert_equal(80, port)
+   assert_equal(nil, port)
 end
 
 function test_parse_host_port2()
