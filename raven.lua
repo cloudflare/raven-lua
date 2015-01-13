@@ -214,9 +214,7 @@ _M._parse_dsn = _parse_dsn
 -- @param self raven client
 -- @param dsn  The DSN of the Sentry instance with this format:
 --             <pre>{PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}</pre>
---             Both HTTP protocol and UDP protocol are supported. For example:
 --             <pre>http://pub:secret@127.0.0.1:8080/sentry/proj-id</pre>
---             <pre>udp://pub:secret@127.0.0.1:8080/sentry/proj-id</pre>
 -- @param conf client configuration. Conf should be a hash table. Possiable
 --             keys are: "tags", "logger". For example:
 --             <pre>{ tags = { foo = "bar", abc = "def" }, logger = "myLogger" }</pre>
@@ -390,9 +388,7 @@ function _M.send_report(self, json, conf)
 
    local json_str = json_encode(json)
    local ok, err
-   if self.protocol == "udp" then
-      ok, err = self:udp_send(json_str)
-   elseif self.protocol == "http" then
+   if self.protocol == "http" then
       ok, err = self:http_send(json_str)
    else
       error("protocol not implemented yet: " .. self.protocol)
@@ -487,43 +483,8 @@ function _M.gen_capture_err(self)
    end
 end
 
--- UDP request template
-local xsentryauth_udp="Sentry sentry_version=2.0,sentry_client=%s,"
-      .. "sentry_timestamp=%s,sentry_key=%s,sentry_secret=%s\n\n%s\n"
-
 -- HTTP request template
 local xsentryauth_http = "POST %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: %d\r\nUser-Agent: %s\r\nX-Sentry-Auth: Sentry sentry_version=5, sentry_client=%s, sentry_timestamp=%s, sentry_key=%s, sentry_secret=%s\r\n\r\n%s"
-
--- udp_send: actually sends the structured data to the Sentry server using
--- UDP
-function _M.udp_send(self, json_str)
-   local ok, err
-
-   if not self.sock then
-      local sock = socket.udp()
-
-      if sock then
-         ok, err = sock:setpeername(self.host, self.port)
-         if not ok then
-            return nil, err
-         end
-         self.sock = sock
-      end
-   end
-
-   local bytes
-
-   if self.sock then
-      local content = string_format(xsentryauth_udp,
-                                   self.client_id,
-                                   iso8601(),
-                                   self.public_key,
-                                   self.secret_key,
-                                   json_str)
-      bytes, err = self.sock:send(content)
-   end
-   return bytes, err
-end
 
 -- http_send_core: do the actual network send. Expects an already
 -- connected socket.
