@@ -63,6 +63,7 @@ Prerequisites
     #for unit tests
     $luarocks install lunit
     $luarocks install luaposix
+    $luarocks install luasocket
 
     #for generating docs
     $luarocks install ldoc
