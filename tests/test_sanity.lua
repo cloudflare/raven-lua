@@ -25,7 +25,7 @@ end
 function test_new()
    local rvn, msg = raven:new("https://public:secret@example.com/sentry/project-id")
    assert_not_nil(rvn)
-   assert_equal("raven-lua/0.4", rvn.client_id)
+   assert_equal("raven-lua/0.4.1", rvn.client_id)
 
    -- missing public key in DSN
    local rvn1, msg = raven:new("https://secret@example.com/sentry/project-id")
@@ -42,10 +42,10 @@ end
 function test_new2()
    local rvn, msg = raven:new("https://public:secret@example.com/sentry/project-id", { tags = { foo = "bar", abc = "def" }, logger = "myLogger" })
    assert_not_nil(rvn)
-   assert_equal("raven-lua/0.4", rvn.client_id)
+   assert_equal("raven-lua/0.4.1", rvn.client_id)
    assert_equal("myLogger", rvn.logger)
-   assert_equal("bar", rvn.tags[1].foo)
-   assert_equal("def", rvn.tags[1].abc)
+   assert_equal("bar", rvn.tags.foo)
+   assert_equal("def", rvn.tags.abc)
 end
 
 function test_new3()

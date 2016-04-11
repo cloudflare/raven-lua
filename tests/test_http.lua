@@ -98,8 +98,8 @@ function test_capture_message()
       -- Example timestamp: 2014-03-07T00:17:47
       assert_not_nil(string_match(json.timestamp, "%d%d%d%d%-%d%d%-%d%dT%d%d:%d%d:%d%d"))
       assert_not_nil(string_match(json.event_id, "%x+"))
-      assert_equal(1, #json.tags)
-      assert_equal("bar", json.tags[1].foo)
+      assert_not_nil(json.tags)
+      assert_equal("bar", json.tags.foo)
       posix.wait(cpid)
    end
 end
@@ -128,8 +128,8 @@ function test_capture_exception()
       -- Example timestamp: 2014-03-07T00:17:47
       assert_not_nil(string_match(json.timestamp, "%d%d%d%d%-%d%d%-%d%dT%d%d:%d%d:%d%d"))
       assert_not_nil(string_match(json.event_id, "%x+"))
-      assert_equal(1, #json.tags)
-      assert_equal("bar", json.tags[1].foo)
+      assert_not_nil(json.tags)
+      assert_equal("bar", json.tags.foo)
       posix.wait(cpid)
    end
 end

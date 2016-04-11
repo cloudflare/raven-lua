@@ -29,6 +29,7 @@ local setmetatable = setmetatable
 local tostring = tostring
 local xpcall = xpcall
 
+local version        = "0.4.1"
 local os_date        = os.date
 local os_time        = os.time
 local debug_getinfo  = debug.getinfo
@@ -235,13 +236,13 @@ function _M.new(self, dsn, conf)
       return nil, err
    end
 
-   obj.client_id = "raven-lua/0.4"
+   obj.client_id = "raven-lua/" .. version
    -- default level "error"
    obj.level = "error"
 
    if conf then
       if conf.tags then
-         obj.tags = { conf.tags }
+         obj.tags = conf.tags
       end
 
       if conf.logger then
@@ -373,9 +374,9 @@ function _M.send_report(self, json, conf)
    if conf then
       if conf.tags then
          if not json.tags then
-            json.tags = { conf.tags }
+            json.tags = conf.tags
          else
-            json.tags[#json.tags + 1] = conf.tags
+            for k,v in pairs(conf.tags) do json.tags[k] = v end
          end
       end
 
@@ -484,7 +485,7 @@ function _M.gen_capture_err(self)
 end
 
 -- HTTP request template
-local xsentryauth_http = "POST %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: %d\r\nUser-Agent: %s\r\nX-Sentry-Auth: Sentry sentry_version=5, sentry_client=%s, sentry_timestamp=%s, sentry_key=%s, sentry_secret=%s\r\n\r\n%s"
+local xsentryauth_http = "POST %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: %d\r\nUser-Agent: %s\r\nX-Sentry-Auth: Sentry sentry_version=7, sentry_client=%s, sentry_timestamp=%s, sentry_key=%s, sentry_secret=%s\r\n\r\n%s"
 
 -- http_send_core: do the actual network send. Expects an already
 -- connected socket.
