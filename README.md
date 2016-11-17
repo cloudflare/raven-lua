@@ -64,6 +64,7 @@ Prerequisites
     $luarocks install lunit
     $luarocks install luaposix
     $luarocks install luasocket
+    $luarocks install lua-cjson
 
     #for generating docs
     $luarocks install ldoc
