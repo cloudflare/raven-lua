@@ -1,0 +1,37 @@
+sudo: required
+dist: trusty
+
+os: linux
+
+language: c
+
+compiler:
+  - gcc
+
+env:
+  matrix:
+    LUAROCKS_VERSION=2.4.1
+
+addons:
+  apt:
+    packages:
+        - lua5.1 lua5.1-dev
+
+cache:
+  apt: true
+  directories:
+  - download-cache
+
+before_script:
+  - wget https://luarocks.org/releases/luarocks-${LUAROCKS_VERSION}.tar.gz
+  - tar zxpf luarocks-${LUAROCKS_VERSION}.tar.gz
+  - cd luarocks-${LUAROCKS_VERSION}
+  - ./configure; sudo make bootstrap
+  - sudo luarocks install luasocket
+  - sudo luarocks install lua-cjson
+  - sudo luarocks install luaposix
+  - sudo luarocks install lunit
+  - cd ..
+
+script:
+  - make test
