@@ -241,7 +241,7 @@ function _M.new(self, dsn, conf)
 
    if conf then
       if conf.tags then
-         obj.tags = { conf.tags }
+         obj.tags = conf.tags
       end
 
       if conf.logger then
@@ -373,9 +373,11 @@ function _M.send_report(self, json, conf)
    if conf then
       if conf.tags then
          if not json.tags then
-            json.tags = { conf.tags }
+            json.tags = conf.tags
          else
-            json.tags[#json.tags + 1] = conf.tags
+            for k,v in pairs(conf.tags) do
+               json.tags[k] = v
+            end
          end
       end
 
