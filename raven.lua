@@ -19,6 +19,7 @@
 -- @author Jiale Zhi <vipcalio@gmail.com>
 -- @copyright (c) 2013-2014, CloudFlare, Inc.
 --------------------------------------------------------------------
+
 --pcall(require("luacov"))
 local json = require("cjson")
 local debug = require("debug")
@@ -221,9 +222,15 @@ _M._parse_dsn = _parse_dsn
 -- @param dsn  The DSN of the Sentry instance with this format:
 --             <pre>{PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}</pre>
 --             <pre>http://pub:secret@127.0.0.1:8080/sentry/proj-id</pre>
--- @param conf client configuration. Conf should be a hash table. Possiable
---             keys are: "tags", "logger". For example:
---             <pre>{ tags = { foo = "bar", abc = "def" }, logger = "myLogger" }</pre>
+-- @param conf client configuration. Conf should be a hash table. Possible keys are:
+--    <ul>
+--    <li><span class="parameter">tags</span> extra tags to include on all reported errors</li>
+--    <li><span class="parameter">logger</span></li>
+--    <li><span class="parameter">verify_ssl</span> boolean of whether to perform SSL certificate verification</li>
+--    <li><span class="parameter">cacert</span> path to CA certificate bundle file (defaults to ./data/cacert.pem)</li>
+--    </ul>
+--             For example:
+--             <pre>{ tags = { foo = "bar", abc = "def" }, logger = "myLogger", verify_ssl = false }</pre>
 -- @return     a new raven instance
 -- @usage
 -- local raven = require "raven"
