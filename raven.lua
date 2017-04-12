@@ -244,6 +244,8 @@ function _M.new(self, dsn, conf)
    obj.client_id = "raven-lua/" .. version
    -- default level "error"
    obj.level = "error"
+   obj.verify_ssl = true
+   obj.cacert = "./data/cacert.pem"
 
    if conf then
       if conf.tags then
@@ -252,6 +254,14 @@ function _M.new(self, dsn, conf)
 
       if conf.logger then
          obj.logger = conf.logger
+      end
+
+      if conf.verify_ssl == false then
+         obj.verify_ssl = false
+      end
+
+      if conf.cacert then
+         obj.cacert = conf.cacert
       end
    end
 
@@ -539,8 +549,9 @@ function _M.lua_wrap_tls(self, sock)
 
    sock, err = ssl.wrap(sock, {
       mode = "client",
-      protocol = "tlsv1",
-      verify = "peer",
+      protocol = "tlsv1_2",
+      verify = self.verify_ssl and "peer" or "none",
+      cafile = self.verify_ssl and self.cacert or nil,
       options = "all",
    })
    if not sock then
@@ -557,7 +568,7 @@ end
 
 -- ngx_wrap_tls: Enables TLS for ngx.socket
 function _M.ngx_wrap_tls(self, sock)
-   local session, err = sock:sslhandshake(false, self.host, true)
+   local session, err = sock:sslhandshake(false, self.host, self.verify_ssl)
    if not session then
       return nil, err
    end
