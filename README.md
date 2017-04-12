@@ -59,14 +59,20 @@ See docs/index.html for more details.
 
 Prerequisites
 =============
+To run the tests:
 ```
-    #for unit tests
-    $luarocks install lunit
-    $luarocks install luaposix
-    $luarocks install luasocket
-    $luarocks install lua-cjson
+    luarocks install lunit
+    luarocks install lua-cjson
+    luarocks install luaposix
+    luarocks install luasocket
+    luarocks install luasec
 
-    #for generating docs
-    $luarocks install ldoc
+    lunit tests/*
 ```
 
+To generate the docs:
+```
+    luarocks install ldoc
+
+    ldoc raven.lua -d docs -p raven-lua
+```
