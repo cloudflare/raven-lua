@@ -34,6 +34,7 @@ local version        = "0.4.1"
 local os_date        = os.date
 local os_time        = os.time
 local debug_getinfo  = debug.getinfo
+local debug_getlocal = debug.getlocal
 local math_random    = math.random
 local json_encode    = json.encode
 local string_format  = string.format
@@ -140,7 +141,50 @@ local function _get_server_name()
    return ngx and ngx.var.server_name or "undefined"
 end
 
-local function backtrace(level)
+local function get_function_details(f)
+  local info = debug_getinfo(f, "fSl")
+  return string_format("%s defined at line %d in %s", tostring(info.func), info.linedefined, info.short_src)
+end
+
+-- these two are mutually recursive, hence declaration before instantiation
+local json_prep_table, json_prep_value
+json_prep_value = function (v, max_depth)
+  if max_depth == nil then
+    max_depth = 0
+  end
+
+  local tv = type(v)
+  if tv == "function" then
+    return get_function_details(v)
+  elseif tv == "lightuserdata" or tv == "userdata" or tv == "thread" then
+    return tostring(v)
+  elseif tv == "table" then
+    if max_depth <= 0 then
+      return tostring(v)
+    else
+      return json_prep_table(v, max_depth - 1)
+    end
+  else
+    return v
+  end
+end
+
+json_prep_table = function (t, max_depth)
+  if max_depth == nil then
+    max_depth = 0
+  end
+
+  local out = {}
+  for k, v in pairs(t) do
+    local tk = type(k)
+    if tk == "number" or tk == "string" then
+      out[k] = json_prep_value(v, max_depth)
+    end
+  end
+  return out
+end
+
+local function backtrace(level, capture_frame_locals, max_depth)
    local frames = {}
 
    level = level + 1
@@ -151,12 +195,32 @@ local function backtrace(level)
          break
       end
 
-      table_insert(frames, 1, {
+      local frame = {
          filename = info.short_src,
          ["function"] = info.name,
          lineno = info.currentline,
-      })
+      }
 
+      if capture_frame_locals then
+        local frame_locals = {}
+        local frame_local_idx = 1
+        while true do
+            local k, v = debug_getlocal(level, frame_local_idx)
+            if k == nil then
+                break
+            end
+
+            -- unsure whether this tostring is actually necessary
+            k = tostring(k)
+            if k:sub(0, 1) ~= "(" then -- internal/temp vars start with (, ignore them
+                frame_locals[k] = json_prep_value(v, max_depth)
+            end
+            frame_local_idx = frame_local_idx + 1
+        end
+        frame.vars = frame_locals
+      end
+
+      table_insert(frames, 1, frame)
       level = level + 1
    end
    return { frames = frames }
@@ -253,6 +317,8 @@ function _M.new(self, dsn, conf)
    obj.level = "error"
    obj.verify_ssl = true
    obj.cacert = "./data/cacert.pem"
+   obj.capture_frame_locals = true
+   obj.max_depth = 0
 
    if conf then
       if conf.tags then
@@ -269,6 +335,14 @@ function _M.new(self, dsn, conf)
 
       if conf.cacert then
          obj.cacert = conf.cacert
+      end
+
+      if conf.capture_frame_locals == false then
+         obj.capture_frame_locals = false
+      end
+
+      if conf.max_depth then
+         obj.max_depth = conf.max_depth
       end
    end
 
@@ -319,7 +393,7 @@ function _M.captureException(self, exception, conf)
    trace_level = conf.trace_level
 
    clear_tab(_json)
-   exception[1].stacktrace = backtrace(trace_level)
+   exception[1].stacktrace = backtrace(trace_level, self.capture_frame_locals, self.max_depth)
    _json.exception = exception
    _json.message = exception[1].value
 
@@ -448,7 +522,7 @@ function _M.catcher(self, err)
 
    clear_tab(_exception[1])
    _exception[1].value = err
-   _exception[1].stacktrace = backtrace(catcher_trace_level)
+   _exception[1].stacktrace = backtrace(catcher_trace_level, self.capture_frame_locals, self.max_depth)
 
    clear_tab(_json)
    _json.exception = _exception
