@@ -19,6 +19,7 @@
 -- @author Jiale Zhi <vipcalio@gmail.com>
 -- @copyright (c) 2013-2014, CloudFlare, Inc.
 --------------------------------------------------------------------
+
 --pcall(require("luacov"))
 local json = require("cjson")
 local debug = require("debug")
@@ -33,6 +34,7 @@ local version        = "0.4.1"
 local os_date        = os.date
 local os_time        = os.time
 local debug_getinfo  = debug.getinfo
+local debug_getlocal = debug.getlocal
 local math_random    = math.random
 local json_encode    = json.encode
 local string_format  = string.format
@@ -44,11 +46,16 @@ local table_insert   = table.insert
 local debug = false
 
 local socket
+local ssl
 local catcher_trace_level = 4
 if not ngx then
    local ok, luasocket = pcall(require, "socket")
    if not ok then
       error("No socket library found, you need ngx.socket or luasocket.")
+   end
+   local ok, luassl = pcall(require, "ssl")
+   if ok then
+      ssl = luassl
    end
    socket = luasocket
 else
@@ -134,7 +141,50 @@ local function _get_server_name()
    return ngx and ngx.var.server_name or "undefined"
 end
 
-local function backtrace(level)
+local function get_function_details(f)
+  local info = debug_getinfo(f, "fSl")
+  return string_format("%s defined at line %d in %s", tostring(info.func), info.linedefined, info.short_src)
+end
+
+-- these two are mutually recursive, hence declaration before instantiation
+local json_prep_table, json_prep_value
+json_prep_value = function (v, max_depth)
+  if max_depth == nil then
+    max_depth = 0
+  end
+
+  local tv = type(v)
+  if tv == "function" then
+    return get_function_details(v)
+  elseif tv == "lightuserdata" or tv == "userdata" or tv == "thread" then
+    return tostring(v)
+  elseif tv == "table" then
+    if max_depth <= 0 then
+      return tostring(v)
+    else
+      return json_prep_table(v, max_depth - 1)
+    end
+  else
+    return v
+  end
+end
+
+json_prep_table = function (t, max_depth)
+  if max_depth == nil then
+    max_depth = 0
+  end
+
+  local out = {}
+  for k, v in pairs(t) do
+    local tk = type(k)
+    if tk == "number" or tk == "string" then
+      out[k] = json_prep_value(v, max_depth)
+    end
+  end
+  return out
+end
+
+local function backtrace(level, capture_frame_locals, max_depth)
    local frames = {}
 
    level = level + 1
@@ -145,12 +195,32 @@ local function backtrace(level)
          break
       end
 
-      table_insert(frames, 1, {
+      local frame = {
          filename = info.short_src,
          ["function"] = info.name,
          lineno = info.currentline,
-      })
+      }
 
+      if capture_frame_locals then
+        local frame_locals = {}
+        local frame_local_idx = 1
+        while true do
+            local k, v = debug_getlocal(level, frame_local_idx)
+            if k == nil then
+                break
+            end
+
+            -- unsure whether this tostring is actually necessary
+            k = tostring(k)
+            if k:sub(0, 1) ~= "(" then -- internal/temp vars start with (, ignore them
+                frame_locals[k] = json_prep_value(v, max_depth)
+            end
+            frame_local_idx = frame_local_idx + 1
+        end
+        frame.vars = frame_locals
+      end
+
+      table_insert(frames, 1, frame)
       level = level + 1
    end
    return { frames = frames }
@@ -162,7 +232,7 @@ local function _parse_host_port(protocol, host)
    local i = string_find(host, ":")
    if not i then
       -- TODO
-      return host, 80
+      return host, nil
    end
 
    local port_str = string_sub(host, i + 1)
@@ -194,7 +264,7 @@ local function _parse_dsn(dsn, obj)
 
       local host, port, err = _parse_host_port(obj.protocol, obj.long_host)
 
-      if not host or not port then
+      if not host then
          return nil, err
       end
 
@@ -216,9 +286,15 @@ _M._parse_dsn = _parse_dsn
 -- @param dsn  The DSN of the Sentry instance with this format:
 --             <pre>{PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}</pre>
 --             <pre>http://pub:secret@127.0.0.1:8080/sentry/proj-id</pre>
--- @param conf client configuration. Conf should be a hash table. Possiable
---             keys are: "tags", "logger". For example:
---             <pre>{ tags = { foo = "bar", abc = "def" }, logger = "myLogger" }</pre>
+-- @param conf client configuration. Conf should be a hash table. Possible keys are:
+--    <ul>
+--    <li><span class="parameter">tags</span> extra tags to include on all reported errors</li>
+--    <li><span class="parameter">logger</span></li>
+--    <li><span class="parameter">verify_ssl</span> boolean of whether to perform SSL certificate verification</li>
+--    <li><span class="parameter">cacert</span> path to CA certificate bundle file (defaults to ./data/cacert.pem)</li>
+--    </ul>
+--             For example:
+--             <pre>{ tags = { foo = "bar", abc = "def" }, logger = "myLogger", verify_ssl = false }</pre>
 -- @return     a new raven instance
 -- @usage
 -- local raven = require "raven"
@@ -239,6 +315,10 @@ function _M.new(self, dsn, conf)
    obj.client_id = "raven-lua/" .. version
    -- default level "error"
    obj.level = "error"
+   obj.verify_ssl = true
+   obj.cacert = "./data/cacert.pem"
+   obj.capture_frame_locals = true
+   obj.max_depth = 0
 
    if conf then
       if conf.tags then
@@ -247,6 +327,22 @@ function _M.new(self, dsn, conf)
 
       if conf.logger then
          obj.logger = conf.logger
+      end
+
+      if conf.verify_ssl == false then
+         obj.verify_ssl = false
+      end
+
+      if conf.cacert then
+         obj.cacert = conf.cacert
+      end
+
+      if conf.capture_frame_locals == false then
+         obj.capture_frame_locals = false
+      end
+
+      if conf.max_depth then
+         obj.max_depth = conf.max_depth
       end
    end
 
@@ -297,7 +393,7 @@ function _M.captureException(self, exception, conf)
    trace_level = conf.trace_level
 
    clear_tab(_json)
-   exception[1].stacktrace = backtrace(trace_level)
+   exception[1].stacktrace = backtrace(trace_level, self.capture_frame_locals, self.max_depth)
    _json.exception = exception
    _json.message = exception[1].value
 
@@ -389,8 +485,10 @@ function _M.send_report(self, json, conf)
 
    local json_str = json_encode(json)
    local ok, err
-   if self.protocol == "http" then
-      ok, err = self:http_send(json_str)
+   if self.protocol == "https" then
+      ok, err = self:http_send(json_str, true)
+   elseif self.protocol == "http" then
+      ok, err = self:http_send(json_str, false)
    else
       error("protocol not implemented yet: " .. self.protocol)
    end
@@ -424,7 +522,7 @@ function _M.catcher(self, err)
 
    clear_tab(_exception[1])
    _exception[1].value = err
-   _exception[1].stacktrace = backtrace(catcher_trace_level)
+   _exception[1].stacktrace = backtrace(catcher_trace_level, self.capture_frame_locals, self.max_depth)
 
    clear_tab(_json)
    _json.exception = _exception
@@ -522,22 +620,84 @@ function _M.http_send_core(self, json_str)
    return string_sub(res, s2 + 1)
 end
 
+-- lua_wrap_tls: Enables TLS for luasocket. Requires luasec.
+function _M.lua_wrap_tls(self, sock)
+   if not ssl then
+      error("no ssl library found, please install luasec")
+   end
+
+   local ok, err
+
+   sock, err = ssl.wrap(sock, {
+      mode = "client",
+      protocol = "tlsv1_2",
+      verify = self.verify_ssl and "peer" or "none",
+      cafile = self.verify_ssl and self.cacert or nil,
+      options = "all",
+   })
+   if not sock then
+      return nil, err
+   end
+
+   ok, err = sock:dohandshake()
+   if not ok then
+      return nil, err
+   end
+
+   return sock
+end
+
+-- ngx_wrap_tls: Enables TLS for ngx.socket
+function _M.ngx_wrap_tls(self, sock)
+   local session, err = sock:sslhandshake(false, self.host, self.verify_ssl)
+   if not session then
+      return nil, err
+   end
+   return sock
+end
+
+-- wrap_tls: Wraps a connected socket with TLS
+function _M.wrap_tls(self, sock)
+   if ngx then
+      return self:ngx_wrap_tls(sock)
+   end
+   return self:lua_wrap_tls(sock)
+end
+
 -- http_send: actually sends the structured data to the Sentry server using
--- HTTP
-function _M.http_send(self, json_str)
+-- HTTP or HTTPS
+function _M.http_send(self, json_str, secure)
    local ok, err
    local sock
+   local port = self.port
 
    sock, err = socket.tcp()
    if not sock then
       return nil, err
    end
-   self.sock = sock
 
-   ok, err = sock:connect(self.host, self.port)
+   -- Rely on default port values for http and https
+   if not port then
+      port = secure and 443 or 80
+   end
+
+   ok, err = sock:connect(self.host, port)
    if not ok then
       return nil, err
    end
+
+   if secure then
+      -- Sprinkle on some TLS juice
+      local tlssock, err = self:wrap_tls(sock)
+      if not tlssock then
+         -- Need to close the tcp connection yet before bailing
+         sock:close()
+         return nil, err
+      end
+      sock = tlssock
+   end
+
+   self.sock = sock
 
    ok, err = self:http_send_core(json_str)
 
