@@ -583,11 +583,10 @@ function _M.ngx_wrap_tls(self, sock)
 end
 
 -- wrap_tls: Wraps a connected socket with TLS
-function _M.wrap_tls(self, sock)
-   if ngx then
-      return self:ngx_wrap_tls(sock)
-   end
-   return self:lua_wrap_tls(sock)
+if ngx then
+   _M.wrap_tls = _M.ngx_wrap_tls
+else
+   _M.wrap_tls = _M.lua_wrap_tls
 end
 
 -- http_send: actually sends the structured data to the Sentry server using
