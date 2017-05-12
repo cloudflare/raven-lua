@@ -227,8 +227,8 @@ _M._parse_dsn = _parse_dsn
 --    <li><span class="parameter">tags</span> extra tags to include on all reported errors</li>
 --    <li><span class="parameter">logger</span></li>
 --    <li><span class="parameter">verify_ssl</span> boolean of whether to perform SSL certificate verification</li>
---    <li><span class="parameter">cacert</span> path to CA certificate bundle file (defaults to ./data/cacert.pem).
---        Useful only when using luasec, ngx version uses the <tt>lua_ssl_trusted_certificate</tt> directive for this.</li>
+--    <li><span class="parameter">cacert</span> path to CA certificate bundle file.
+--        Required only when using luasec, ngx version uses the <tt>lua_ssl_trusted_certificate</tt> directive for this.</li>
 --    </ul>
 --             For example:
 --             <pre>{ tags = { foo = "bar", abc = "def" }, logger = "myLogger", verify_ssl = false }</pre>
@@ -253,7 +253,6 @@ function _M.new(self, dsn, conf)
    -- default level "error"
    obj.level = "error"
    obj.verify_ssl = true
-   obj.cacert = "./data/cacert.pem"
 
    if conf then
       if conf.tags then
@@ -268,9 +267,8 @@ function _M.new(self, dsn, conf)
          obj.verify_ssl = false
       end
 
-      if conf.cacert then
-         obj.cacert = conf.cacert
-      end
+
+      obj.cacert = conf.cacert
    end
 
    return setmetatable(obj, mt)
