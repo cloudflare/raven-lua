@@ -3,6 +3,7 @@ local socket = require "socket"
 local raven = require "raven"
 local cjson = require "cjson"
 local posix = require "posix"
+local ssl = require "ssl"
 
 local print = print
 local error = error
@@ -12,17 +13,33 @@ local string_match   = string.match
 local os_exit        = os.exit
 local random         = math.random
 
+-- generate HTTPS certs:
+-- create CA:  openssl req -x509 -newkey rsa:4096 -keyout ca.key.pem -out ca.cert.pem -days 1000000 -nodes
+-- create CSR: openssl req -newkey rsa:4096 -keyout key.pem -out cert.csr.pem -nodes
+-- sign CSR:   openssl x509 -req -in cert.csr.pem -CA ca.cert.pem -CAkey ca.key.pem -CAcreateserial -out cert.pem -days 1000000
+
 math.randomseed(os.time())
 
-module("test_http", lunit.testcase)
+module("test_https", lunit.testcase)
 
 local server = {}
 local rvn
 local dsn
 local port = -1
 
+local server_sslparams = {
+  mode = "server",
+  protocol = "tlsv1_2",
+  key = "./tests/certs/key.pem",
+  certificate = "./tests/certs/cert.pem",
+  verify = "none",
+  options = "all"
+}
+
+
 function setup()
    port = random(20000, 65535)
+   --port = 10000
    local sock = socket.tcp()
    assert(sock)
    assert(sock:bind("*", port))
@@ -30,13 +47,14 @@ function setup()
    server.sock = sock
 end
 
+
 function teardown()
    -- socket has already been closed in http_respond
    --server.sock:close()
 end
 
 local function get_dsn()
-   dsn = "http://pub:secret@127.0.0.1:" .. port .. "/sentry/proj-id"
+   dsn = "https://pub:secret@127.0.0.1:" .. port .. "/sentry/proj-id"
    return dsn
 end
 
@@ -73,63 +91,65 @@ function http_respond(sock)
    sock:close()
 end
 
-function test_capture_message()
+function test_validate_cert_ok()
    local cpid = posix.fork()
    if cpid == 0 then
+      local client = server.sock:accept()
+      client = ssl.wrap(client, server_sslparams)
+      assert(client:dohandshake())
+      local json_str = http_read(client)
+      local json = cjson.decode(json_str)
+      http_respond(client)
+      os_exit()
+   else
       rvn = raven:new(get_dsn(), {
-         tags = { foo = "bar" }
+         tags = { foo = "bar" },
+         cacert = "./tests/certs/ca.cert.pem",
       })
       local id = rvn:captureMessage("Sentry is a realtime event logging and aggregation platform.")
       assert_not_nil(id)
       assert_not_nil(string_match(id, "%x+"))
-      os_exit()
-   else
-      local client = server.sock:accept()
-      local json_str = http_read(client)
-      --local json_str = get_body(res)
-      local json = cjson.decode(json_str)
-      http_respond(client)
-
-      assert_not_nil(json)
-      assert_equal("undefined", json.server_name)
-      assert_equal("Sentry is a realtime event logging and aggregation platform.", json.message)
-      assert_equal("lua", json.platform)
-      assert_not_nil(string_match(json.culprit, "tests/test_http.lua:%d+"))
-      -- Example timestamp: 2014-03-07T00:17:47
-      assert_not_nil(string_match(json.timestamp, "%d%d%d%d%-%d%d%-%d%dT%d%d:%d%d:%d%d"))
-      assert_not_nil(string_match(json.event_id, "%x+"))
-      assert_not_nil(json.tags)
-      assert_equal("bar", json.tags.foo)
-      posix.wait(cpid)
    end
 end
 
-function test_capture_exception()
+function test_validate_cert_failure()
    local cpid = posix.fork()
    if cpid == 0 then
-      rvn = raven:new(get_dsn(), {
-         tags = { foo = "bar" }
-      })
-      local id = rvn:captureException({{}})
-      assert_not_nil(id)
-      assert_not_nil(string_match(id, "%x+"))
+      local client = server.sock:accept()
+      client = ssl.wrap(client, server_sslparams)
+      local ok, err = client:dohandshake()
+      assert(not ok)
       os_exit()
    else
-      local client = server.sock:accept()
-      local json_str = http_read(client)
-      --local json_str = get_body(res)
-      local json = cjson.decode(json_str)
-      http_respond(client)
-
-      assert_not_nil(json)
-      assert_equal("undefined", json.server_name)
-      assert_equal("lua", json.platform)
-      assert_not_nil(string_match(json.culprit, "tests/test_http.lua:%d+"))
-      -- Example timestamp: 2014-03-07T00:17:47
-      assert_not_nil(string_match(json.timestamp, "%d%d%d%d%-%d%d%-%d%dT%d%d:%d%d:%d%d"))
-      assert_not_nil(string_match(json.event_id, "%x+"))
-      assert_not_nil(json.tags)
-      assert_equal("bar", json.tags.foo)
-      posix.wait(cpid)
+      -- load the certificate for another CA, it must fail
+      rvn = raven:new(get_dsn(), {
+         tags = { foo = "bar" },
+         cacert = "./tests/certs/wrongca.cert.pem",
+      })
+      local ok, err = rvn:captureMessage("Sentry is a realtime event logging and aggregation platform.")
+      assert_nil(ok)
+      assert_equal('certificate verify failed', err)
    end
 end
+
+function test_no_validate_cert()
+   local cpid = posix.fork()
+   if cpid == 0 then
+      local client = server.sock:accept()
+      client = ssl.wrap(client, server_sslparams)
+      assert(client:dohandshake())
+      local json_str = http_read(client)
+      local json = cjson.decode(json_str)
+      http_respond(client)
+      os_exit()
+   else
+      rvn = raven:new(get_dsn(), {
+         tags = { foo = "bar" },
+         verify_ssl = false,
+      })
+      local id = rvn:captureMessage("Sentry is a realtime event logging and aggregation platform.")
+      assert_not_nil(id)
+      assert_not_nil(string_match(id, "%x+"))
+   end
+end
+
