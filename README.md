@@ -67,7 +67,7 @@ To run the tests:
     luarocks install luasocket
     luarocks install luasec
 
-    lunit tests/*
+    lunit tests/*.lua
 ```
 
 To generate the docs:
