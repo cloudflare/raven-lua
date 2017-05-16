@@ -104,7 +104,7 @@ function test_validate_cert_ok()
    else
       rvn = raven:new(get_dsn(), {
          tags = { foo = "bar" },
-         cacert = "./tests/certs/ca.cert.pem",
+         cafile = "./tests/certs/ca.cert.pem",
       })
       local id = rvn:captureMessage("Sentry is a realtime event logging and aggregation platform.")
       assert_not_nil(id)
@@ -124,7 +124,7 @@ function test_validate_cert_failure()
       -- load the certificate for another CA, it must fail
       rvn = raven:new(get_dsn(), {
          tags = { foo = "bar" },
-         cacert = "./tests/certs/wrongca.cert.pem",
+         cafile = "./tests/certs/wrongca.cert.pem",
       })
       local ok, err = rvn:captureMessage("Sentry is a realtime event logging and aggregation platform.")
       assert_nil(ok)

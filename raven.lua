@@ -227,7 +227,7 @@ _M._parse_dsn = _parse_dsn
 --    <li><span class="parameter">tags</span> extra tags to include on all reported errors</li>
 --    <li><span class="parameter">logger</span></li>
 --    <li><span class="parameter">verify_ssl</span> boolean of whether to perform SSL certificate verification</li>
---    <li><span class="parameter">cacert</span> path to CA certificate bundle file.
+--    <li><span class="parameter">cafile</span> path to CA certificate bundle file.
 --        Required only when using luasec, ngx version uses the <tt>lua_ssl_trusted_certificate</tt> directive for this.</li>
 --    </ul>
 --             For example:
@@ -268,7 +268,7 @@ function _M.new(self, dsn, conf)
       end
 
 
-      obj.cacert = conf.cacert
+      obj.cafile = conf.cafile
    end
 
    return setmetatable(obj, mt)
@@ -557,7 +557,7 @@ function _M.lua_wrap_tls(self, sock)
       mode = "client",
       protocol = "tlsv1_2",
       verify = self.verify_ssl and "peer" or "none",
-      cafile = self.verify_ssl and self.cacert or nil,
+      cafile = self.verify_ssl and self.cafile or nil,
       options = "all",
    })
    if not sock then
