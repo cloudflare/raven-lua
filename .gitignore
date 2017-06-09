@@ -1,3 +1,5 @@
 *~
 *.sw*
 .lvimrc
+/doc/
+/tests/sentry.conf.out

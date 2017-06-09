@@ -1,21 +1,24 @@
 # Simple Makefile for raven-lua that runs tests and generates docs
 #
-# Copyright (c) 2014 CloudFlare, Inc.
+# Copyright (c) 2014-2017 CloudFlare, Inc.
 
-LUNIT := $(shell which lunit)
-ifeq ($(LUNIT),)
-$(error lunit is required to run test suite)
-endif
+RESTY := $(shell which resty)
 
-LDOC := $(shell which ldoc)
-
-TESTS := $(wildcard tests/*.lua)
-
-MODULES := raven.lua
+.PHONY: lint
+lint:
+	luacheck .
 
 .PHONY: test
-test: $(TESTS) ; @lunit $(TESTS)
+test: lint
+	tsc tests/*.lua
+ifeq ($(RESTY),)
+	echo "resty-cli not found, skip ngx tests"
+else
+	sed -e "s|%PWD%|$$PWD|" tests/sentry.conf > tests/sentry.conf.out
+	$(RESTY) --http-include $$PWD/tests/sentry.conf.out -e 'require("telescope.runner")(arg)' /dev/null tests/resty/*.lua
+endif
 
-doc: $(MODULES) ; @ldoc -d docs $(MODULES)
+.PHONY: doc
+doc:
+	ldoc .
 
-print-%: ; @echo $*=$($*)
