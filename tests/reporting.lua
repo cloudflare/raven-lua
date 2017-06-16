@@ -92,7 +92,7 @@ describe("Sentry error reporter", function()
             tags = { type="foobar", client_ip="1.2.3.4" },
         }
 
-        rvn:capture_message("hello", { tags = { client_ip="::1", foo="bar" } })
+        rvn:capture_message("hello", { tags = { client_ip="::1", foo="bar", another="tag" } })
         rvn:capture_message("bye", { tags = { client_ip="::2", foo="baz" } })
         assert_equal(#sender.events, 2)
 
@@ -100,11 +100,13 @@ describe("Sentry error reporter", function()
         assert_equal("foobar", ev.tags.type)
         assert_equal("::1", ev.tags.client_ip)
         assert_equal("bar", ev.tags.foo)
+        assert_equal("tag", ev.tags.another)
 
         ev = sender.events[2]
         assert_equal("foobar", ev.tags.type)
         assert_equal("::2", ev.tags.client_ip)
         assert_equal("baz", ev.tags.foo)
+        assert_nil(ev.tags.another)
     end)
 
     test("custom settings", function()
@@ -139,5 +141,24 @@ describe("Sentry error reporter", function()
         assert_type(ev.exception[1].stacktrace.frames, 'table')
         -- check that the __tostring metamethod does its job
         assert_match('.*boom.*', tostring(ev))
+    end)
+
+    test("extra data", function()
+        local sender = test_sender.new()
+        local rvn = raven.new { sender = sender, extra = { some="data" } }
+
+        rvn:capture_message("hello", { extra = { client_ip="::1", foo="bar" } })
+        rvn:capture_message("bye", { extra = { client_ip="::2", foo="baz" } })
+        assert_equal(#sender.events, 2)
+
+        local ev = sender.events[1]
+        assert_equal("::1", ev.extra.client_ip)
+        assert_equal("bar", ev.extra.foo)
+        assert_equal("data", ev.extra.some)
+
+        ev = sender.events[2]
+        assert_equal("::2", ev.extra.client_ip)
+        assert_equal("baz", ev.extra.foo)
+        assert_equal("data", ev.extra.some)
     end)
 end)

@@ -29,6 +29,7 @@ local catcher_trace_level = 4
 -- @field logger Sets the message logger (string), defaults to `"root"`
 -- @field tags   Defaults tags for sent messages, defaults to `{}`. Example:
 --  `{ "foo"="bar", ... }`
+-- @field extra  Default extra data sent with messages, defaults to `{}`
 -- @table sentry_conf
 
 local raven_mt = { }
@@ -53,6 +54,7 @@ function _M.new(conf)
         level = conf.level or "error",
         logger = conf.logger or "root",
         tags = conf.tags or nil,
+        extra = conf.extra or nil,
     }
 
     return setmetatable(obj, raven_mt)
@@ -91,6 +93,9 @@ end
 -- @field tags Tags for the message, they will be coalesced with the ones
 --  provided in the @{sentry_conf} table used in the constructor if any. In
 --  case of conflict, the message tags have precedence.
+--
+-- @field extra Extra data for the message. Like tags, data is merged with
+--  the extra data passed to the constructor.
 --
 -- @field trace_level Starting stack level for the report (can be used to skip
 --  useless frames. The internal raven frames are automatically skipped, so a
@@ -186,6 +191,20 @@ raven_mt.capture_exception = raven_mt.captureException
 -- @function Raven:capture_message
 raven_mt.capture_message = raven_mt.captureMessage
 
+local function merge_tables(msg, root)
+    if not root then
+        return msg
+    elseif not msg then
+        return root
+    end
+
+    -- both table exist, merge root into msg
+    for k, v in pairs(root) do
+        msg[k] = msg[k] or v
+    end
+    return msg
+end
+
 --- Send directly a report to Sentry.
 -- This is an internal function, you should not call it directly, use
 -- @{Raven:captureException} or @{Raven:captureMessage} instead.
@@ -194,8 +213,8 @@ raven_mt.capture_message = raven_mt.captureMessage
 -- @param json table to be sent. Don't need to fill `event_id`, `timestamp`,
 --  `tags` and `level`.
 -- @param conf capture configuration table, see @{report_conf}
--- @return        On success, return event id. If not success, return nil and
---  an error string.
+-- @return On success, return event id. If not success, return nil and an
+--  error string.
 function raven_mt:send_report(json, conf)
     local event_id = uuid4()
 
@@ -212,22 +231,19 @@ function raven_mt:send_report(json, conf)
     json.event_id  = event_id
     json.timestamp = iso8601()
     json.level     = self.level
-    json.tags      = self.tags
     json.platform  = "lua"
     json.logger    = self.logger
 
     if conf then
-        if conf.tags then
-            if not json.tags then
-                json.tags = conf.tags
-            else
-                for k,v in pairs(conf.tags) do json.tags[k] = v end
-            end
-        end
+        json.tags = merge_tables(conf.tags, self.tags)
+        json.extra = merge_tables(conf.extra, self.extra)
 
         if conf.level then
             json.level = conf.level
         end
+    else
+        json.tags = self.tags
+        json.extra = self.extra
     end
 
     json.server_name = _M.get_server_name()
