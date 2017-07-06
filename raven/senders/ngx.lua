@@ -16,6 +16,7 @@ local util = require 'raven.util'
 local ngx_socket = ngx.socket
 local ngx_get_phase = ngx.get_phase
 local string_format = string.format
+local table_remove = table.remove
 local parse_dsn = util.parse_dsn
 local generate_auth_header = util.generate_auth_header
 local _VERSION = util._VERSION
@@ -88,6 +89,42 @@ local function send_msg(self, msg)
     return resp:match("\r\n\r\n(.*)") or ""
 end
 
+-- async task pushing: sometimes the socket API is not available, in this case,
+-- messages are pushed into a queue and sent in a timer. Only one timer at most
+-- is running per instance (and per worker): timers are a scarce resource, we
+-- don't want to exhaust the timer pool during message storms.
+--
+-- TODO: expose an option on the ctor to always use this? it might be desirable
+-- to not slow down hot code sections by sending messages
+
+local function send_task(premature, self)
+    if premature then
+        return
+    end
+
+    local ok, err = xpcall(function()
+        local send_queue = self.send_queue
+        while #send_queue > 0 do
+            local msg = send_queue[1]
+            -- do not remove the message yet as an empty queue is the signal to
+            -- re-start the task
+            local ok, err = send_msg(self, msg)
+            if not ok then
+                ngx.log(ngx.ERR, 'raven: failed to send message asyncronously: ',
+                    err, '. Drop the message.')
+            end
+            table_remove(send_queue, 1)
+        end
+    end, debug.traceback)
+
+    if not ok then
+        ngx.log(ngx.ERR, 'raven: failed to run the async sender task: ', err)
+        -- TODO: restart the task here? requires a extra counter as we don't want
+        -- to fail in loop indefinitely.
+    end
+    self.task_running = false
+end
+
 
 local mt = {}
 mt.__index = mt
@@ -96,7 +133,6 @@ function mt:send(json_str)
     local auth = generate_auth_header(self)
     local msg = string_format(HTTP_REQUEST, self.request_uri, self.host, #json_str,
         "raven-lua-ngx/" .. _VERSION, auth, json_str)
-    -- TODO: timer for phases where sockets are disabled
     local phase = ngx_get_phase()
     -- rewrite_by_lua*, access_by_lua*, content_by_lua*, ngx.timer.*, ssl_certificate_by_lua*, ssl_session_fetch_by_lua*
     if phase == 'rewrite' or
@@ -110,8 +146,25 @@ function mt:send(json_str)
         -- socket is available
         return send_msg(self, msg)
     else
-        -- cannot use socket, just push the task in the async queue
-        error('not yet implemented in phase ' .. phase)
+        -- cannot use socket: push the message in the async queue
+        local send_queue = self.send_queue
+        local queue_size = #send_queue
+        if queue_size <= self.queue_limit then
+            send_queue[queue_size + 1] = msg
+            if not self.task_running then
+                local ok, err = ngx.timer.at(0, send_task, self)
+                if not ok then
+                    return nil, 'failed to schedule async sender task: ' .. err
+                end
+
+                -- assume the task is already running, as other messages might
+                -- be reported before it is actually scheduled and run.
+                self.task_running = true
+            end
+        else
+            return nil, 'failed to send message asyncronously: queue is full'
+        end
+        return true
     end
 end
 
@@ -121,6 +174,8 @@ end
 --  defaults to false)
 -- @field configure_socket Callback used to configure the created socket (e.g.
 --  adjusting the timeout). Called with the sender object and socket as arguments.
+-- @field queue_limit Maximum number of message in the asynchronous sending queue
+--  (default: 50)
 -- @table sender_conf
 
 --- Create a new sender object for the given DSN
@@ -135,6 +190,9 @@ function _M.new(conf)
     obj.target = conf.target or obj.host
     obj.verify_ssl = conf.verify_ssl
     obj.configure_socket = conf.configure_socket
+    obj.queue_limit = conf.queue_limit or 50
+    obj.send_queue = {}
+    obj.task_running = false
 
     return setmetatable(obj, mt)
 end
