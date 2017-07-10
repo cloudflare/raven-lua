@@ -11,12 +11,8 @@ lint:
 .PHONY: test
 test: lint
 	tsc tests/*.lua
-ifeq ($(RESTY),)
-	echo "resty-cli not found, skip ngx tests"
-else
 	sed -e "s|%PWD%|$$PWD|" tests/sentry.conf > tests/sentry.conf.out
 	$(RESTY) --http-include $$PWD/tests/sentry.conf.out -e 'require("telescope.runner")(arg)' /dev/null tests/resty/*.lua
-endif
 
 .PHONY: doc
 doc:
