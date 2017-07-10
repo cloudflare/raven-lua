@@ -40,6 +40,9 @@ X-Sentry-Auth: %s
 %s
 ]], '\r?\n', '\r\n')
 
+local CALLBACK_DEFAULT_ERRMSG =
+    "failed to onfigure socket (custom callback did not returned a value)"
+
 local function send_msg(self, msg)
     local ok
     local sock, err = ngx_socket.tcp()
@@ -50,7 +53,7 @@ local function send_msg(self, msg)
     if self.configure_socket then
         ok, err = self.configure_socket(self, sock)
         if not ok then
-            return nil, err
+            return nil, err or CALLBACK_DEFAULT_ERRMSG
         end
     end
 
@@ -174,6 +177,7 @@ end
 --  defaults to false)
 -- @field configure_socket Callback used to configure the created socket (e.g.
 --  adjusting the timeout). Called with the sender object and socket as arguments.
+--  Must return `true` or `nil, error_message`.
 -- @field queue_limit Maximum number of message in the asynchronous sending queue
 --  (default: 50)
 -- @table sender_conf
