@@ -16,9 +16,14 @@ Synopsis
     local raven = require "raven"
 
     -- http://pub:secret@127.0.0.1:8080/sentry/proj-id
-    local rvn = raven:new("http://pub:secret@127.0.0.1:8080/sentry/proj-id", {
-       tags = { foo = "bar" },
-    })
+    local rvn = raven.new {
+        -- multiple senders are available for different networking backends,
+        -- doing a custom one is also very easy.
+        sender = require("raven.senders.luasocket").new {
+            dsn = "http://pub:secret@127.0.0.1:8080/sentry/proj-id",
+        },
+        tags = { foo = "bar" },
+    }
 
     -- Send a message to sentry
     local id, err = rvn:captureMessage(
@@ -52,8 +57,9 @@ Synopsis
     local ok = rvn:call(bad_func, 1)
 
 ```
-Documents
-=========
+
+Documentation
+=============
 
 See docs/index.html for more details.
 
@@ -67,12 +73,12 @@ To run the tests:
     luarocks install luasocket
     luarocks install luasec
 
-    lunit tests/*.lua
+    make test
 ```
 
 To generate the docs:
 ```
     luarocks install ldoc
 
-    ldoc raven.lua -d docs -p raven-lua
+    make doc
 ```
