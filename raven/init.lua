@@ -15,7 +15,7 @@ _M._VERSION = util._VERSION
 local debug_getinfo = debug.getinfo
 local table_insert = table.insert
 local unpack = unpack or table.unpack -- luacheck: ignore
-local uuid4 = util.uuid4
+local generate_event_id = util.generate_event_id
 local iso8601 = util.iso8601
 local json_encode = cjson.encode
 local errlog = util.errlog
@@ -112,6 +112,10 @@ end
 -- See [reference](https://docs.sentry.io/clientdev/interfaces/exception/).
 -- Note that the stack trace will be filled automatically.
 --
+-- Note that the `conf` table will be modified by the function, therefore it
+-- is not safe to reuse conf table across calls. Consider passing common
+-- attributes to the client constructor instead.
+--
 -- @function Raven:captureException
 -- @param exception  a table describing the exception conforming to the Sentry
 --  format described in the reference docs
@@ -155,6 +159,10 @@ end
 
 --- Send a message to Sentry.
 -- See [reference](https://docs.sentry.io/clientdev/interfaces/message/).
+--
+-- Note that the `conf` table will be modified by the function, therefore it
+-- is not safe to reuse conf table across calls. Consider passing common
+-- attributes to the client constructor instead.
 --
 -- @function Raven:captureMessage
 -- @param message the message, usually a raw string
@@ -209,6 +217,10 @@ end
 -- This is an internal function, you should not call it directly, use
 -- @{Raven:captureException} or @{Raven:captureMessage} instead.
 --
+-- Note that the `conf` table will be modified by the function, therefore it
+-- is not safe to reuse conf table across calls. Consider passing common
+-- attributes to the client constructor instead.
+--
 -- @function Raven:send_report
 -- @param json table to be sent. Don't need to fill `event_id`, `timestamp`,
 --  `tags` and `level`.
@@ -216,10 +228,7 @@ end
 -- @return On success, return event id. If not success, return nil and an
 --  error string.
 function raven_mt:send_report(json, conf)
-    local event_id = uuid4()
-
-    -- TODO: Why is this line commented out?
-    --json.project   = self.project_id,
+    local event_id = generate_event_id()
 
     if not json then
         json = self.json
