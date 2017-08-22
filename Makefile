@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2014-2017 CloudFlare, Inc.
 
-RESTY := $(shell which resty)
+all: test
 
 .PHONY: lint
 lint:
@@ -13,7 +13,7 @@ test: lint
 	tsc tests/*.lua
 	sed -e "s|%PWD%|$$PWD|" tests/sentry.conf > tests/sentry.conf.out
 	touch empty-file
-	$(RESTY) --http-include $$PWD/tests/sentry.conf.out -e 'require("telescope.runner")(arg)' empty-file tests/resty/*.lua
+	resty --http-include $$PWD/tests/sentry.conf.out -e 'require("telescope.runner")(arg)' empty-file tests/resty/*.lua
 
 .PHONY: doc
 doc:
