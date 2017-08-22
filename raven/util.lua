@@ -27,22 +27,17 @@ function _M.errlog(...)
     print("[ERROR]", ...)
 end
 
---- Create a UUID in Version 4 format as a string albeit without the `-s`
--- separating fields.
-function _M.uuid4()
-    -- TODO: the Sentry SDK docs don't specify any requirement for `event_id`
-    -- field as far as I know
-
-    -- we need 12 random hex digits at some point, but some version of Lua can
-    -- only generate random integers up to 2^31, so we are limited to 7
+--- Returns a string suitable to be used as `event_id`.
+-- @return a new random `event_id` string.
+function _M.generate_event_id()
+    -- Some version of Lua can only generate random integers up to 2^31, so we are limited to 7
     -- hex-digits per call
-    return string_format("%07x%05x4%03x8%03x%07x%05x",
+    return string_format("%07x%07x%07x%07x%04x",
         math_random(0, 0xfffffff),
-        math_random(0, 0xfffff),
-        math_random(0, 0xfff),
-        math_random(0, 0xfff),
         math_random(0, 0xfffffff),
-        math_random(0, 0xfffff))
+        math_random(0, 0xfffffff),
+        math_random(0, 0xfffffff),
+        math_random(0, 0xffff))
 end
 
 --- Returns the current date/time in ISO8601 format with no timezone indicator
