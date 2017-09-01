@@ -1,3 +1,4 @@
+-- vim: st=4 sts=4 sw=4 et:
 -- Test sender for running the test suite without spawning an actual server.
 --
 -- @module raven.senders.test

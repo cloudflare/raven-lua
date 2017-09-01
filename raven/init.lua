@@ -1,3 +1,4 @@
+-- vim: st=4 sts=4 sw=4 et:
 --- Main Sentry reporting module.
 -- This module contains the core of the reporting logic, it still depends on a
 -- network layer to actually send the data to the Sentry server.
