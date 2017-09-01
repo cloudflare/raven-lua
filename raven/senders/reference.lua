@@ -1,3 +1,4 @@
+-- vim: st=4 sts=4 sw=4 et:
 --- Sender object specification.
 -- A Lua has a disparate ecosystem of networking libraries, this makes difficult
 -- doing a one-size-fits-all library. Lua-Raven does as much logic as possible

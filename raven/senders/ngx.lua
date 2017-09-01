@@ -1,3 +1,4 @@
+-- vim: st=4 sts=4 sw=4 et:
 --- Network backend using the [lua-nginx-module](https://github.com/openresty/lua-nginx-module) cosocket API.
 -- This module can be used with the raw Lua module for nginx or the OpenResty
 -- bundle.

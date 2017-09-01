@@ -1,3 +1,4 @@
+-- vim: st=4 sts=4 sw=4 et:
 --- Network backend using [LuaSocket](http://w3.impa.br/~diego/software/luasocket/home.html).
 -- This module should be used when the LuaSocket library is available. Note
 -- that the HTTPS support depends on the [LuaSec](https://github.com/brunoos/luasec)

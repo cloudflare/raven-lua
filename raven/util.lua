@@ -1,3 +1,4 @@
+-- vim: st=4 sts=4 sw=4 et:
 --- Utility functions module.
 -- This is mostly used for internal stuff and should not be relevant for end
 -- users (except some function that can be overridden).
