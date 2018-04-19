@@ -36,6 +36,91 @@ local catcher_trace_level = 4
 local raven_mt = { }
 raven_mt.__index = raven_mt
 
+-- utility function to deal errors, xpcall and stack traces
+
+-- This metatable is associated with returned error object so the original
+-- error message is returned when tostring is invoked on it. This allows to use
+-- the error objects for logging purposes as well. This is mostly a workaround
+-- of xpcall error handlers having a single result.
+local err_mt = {
+    __tostring = function(self)
+        return self.message
+    end,
+}
+
+-- return a string detailing the function running at a stack level
+local function get_culprit(level)
+    local culprit
+
+    level = level + 1
+    local info = debug_getinfo(level, "Snl")
+    if info.name then
+        culprit = info.name
+    else
+        culprit = info.short_src .. ":" .. info.linedefined
+    end
+
+    return culprit
+end
+
+local function backtrace(level)
+    local frames = {}
+
+    level = level + 1
+
+    while true do
+        local info = debug_getinfo(level, "Snl")
+        if not info then
+            break
+        end
+
+        table_insert(frames, 1, {
+            filename = info.short_src,
+            ["function"] = info.name,
+            lineno = info.currentline,
+        })
+
+        level = level + 1
+    end
+    return { frames = frames }
+end
+
+-- error_catcher: used to catch an error from xpcall and return a correct
+-- error message
+local function error_catcher(err)
+    if debug then
+        errlog("catch: ", err)
+    end
+
+    return {
+        message = err,
+        culprit = get_culprit(catcher_trace_level),
+        exception = { {
+            value = err,
+            stacktrace = backtrace(catcher_trace_level),
+        } },
+    }
+end
+
+-- a wrapper around error_catcher that will return something even if
+-- error_catcher itself crashes
+local function capture_error_handler(err)
+     local ok, json_exception = pcall(error_catcher, err)
+     if not ok then
+         -- when failed, json_exception is error message
+         errlog('failed to run exception catcher: ' .. tostring(json_exception))
+         -- try to return something anyway (error message with no culprit and
+         -- no stacktrace
+         json_exception = {
+             message = err,
+             culprit = '???',
+             exception = { { value=err } },
+         }
+     end
+     return setmetatable(json_exception, err_mt)
+end
+_M.capture_error_handler = capture_error_handler
+
 --- Create a new Sentry client.
 -- It takes a @{sentry_conf} table tune its behavior.
 -- @param conf client configuration.
@@ -66,28 +151,6 @@ end
 -- to override this to something more sensible.
 function _M.get_server_name()
     return "undefined"
-end
-
-local function backtrace(level)
-    local frames = {}
-
-    level = level + 1
-
-    while true do
-        local info = debug_getinfo(level, "Snl")
-        if not info then
-            break
-        end
-
-        table_insert(frames, 1, {
-            filename = info.short_src,
-            ["function"] = info.name,
-            lineno = info.currentline,
-        })
-
-        level = level + 1
-    end
-    return { frames = frames }
 end
 
 --- This table can be used to tune the message reporting.
@@ -149,7 +212,7 @@ function raven_mt:captureException(exception, conf)
     local payload = {
         exception = exception,
         message = exception[1].value,
-        culprit = self:get_culprit(trace_level),
+        culprit = get_culprit(trace_level),
     }
 
     -- because whether tail call will or will not appear in the stack back trace
@@ -185,7 +248,7 @@ function raven_mt:captureMessage(message, conf)
 
     local payload = {
         message = message,
-        culprit = self:get_culprit(conf.trace_level),
+        culprit = get_culprit(conf.trace_level),
     }
 
     local id, err = self:send_report(payload, conf)
@@ -268,34 +331,17 @@ function raven_mt:send_report(json, conf)
     return json.event_id
 end
 
+-- the above two function used to be exposed as method, but there is no reason
+-- to do so as they don't need self at the end.
+
 -- Get culprit using given level
 function raven_mt:get_culprit(level) -- luacheck: ignore self
-    local culprit
-
-    level = level + 1
-    local info = debug_getinfo(level, "Snl")
-    if info.name then
-        culprit = info.name
-    else
-        culprit = info.short_src .. ":" .. info.linedefined
-    end
-    return culprit
+    return get_culprit(level)
 end
 
 -- catcher: used to catch an error from xpcall.
-function raven_mt:catcher(err)
-    if debug then
-        errlog("catch: ", err)
-    end
-
-    return {
-        message = err,
-        culprit = self:get_culprit(catcher_trace_level),
-        exception = { {
-            value = err,
-            stacktrace = backtrace(catcher_trace_level),
-        } },
-    }
+function raven_mt:catcher(err) -- luacheck: ignore self
+    return error_catcher(err)
 end
 
 --- Call given function and report any errors to Sentry.
@@ -312,34 +358,14 @@ function raven_mt:call(f, ...)
     -- When used with ngx_lua, connecting a tcp socket in xpcall error handler
     -- will cause a "yield across C-call boundary" error. To avoid this, we
     -- move all the network operations outside of the xpcall error handler.
-    local json_exception
-    local res = { xpcall(f,
-        function (err)
-            local ok
-            ok, json_exception = pcall(self.catcher, self, err)
-            if not ok then
-                -- when failed, json_exception is error message
-                errlog(json_exception)
-            end
-            return err
-        end,
-        ...) }
-    if json_exception then
-        self:send_report(json_exception)
+    local res = { xpcall(f, capture_error_handler, ...) }
+    if not res[1] then
+        self:send_report(res[2])
+        res[2] = res[2].message -- turn the error object back to its initial form
     end
 
     return unpack(res)
 end
-
--- This metatable is associated with returned error object so the original
--- error message is returned when tostring is invoked on it. This allows to use
--- the error objects for logging purposes as well. This is mostly a workaround
--- of xpcall error handlers having a single result.
-local err_mt = {
-    __tostring = function(self)
-        return self.message
-    end,
-}
 
 --- Return a error handler function to be used with @{xpcall}
 -- This is a high performance version of the @{call} method, but it demands
@@ -364,22 +390,9 @@ local err_mt = {
 -- if not ok then
 --    rvn:send_report(err, { tags = { "foo"="bar" } })
 -- end
-function raven_mt:gen_capture_err()
-    return function (err)
-        local ok, json_exception = pcall(self.catcher, self, err)
-        if not ok then
-            -- when failed, json_exception is error message
-            errlog('failed to run exception catcher: ' .. tostring(json_exception))
-            -- try to return something anyway (error message with no culprit and
-            -- no stacktrace
-            json_exception = {
-                message = err,
-                culprit = '???',
-                exception = { { value=err } },
-            }
-        end
-        return setmetatable(json_exception, err_mt)
-    end
+function raven_mt:gen_capture_err() -- luacheck: ignore self
+    return capture_error_handler
 end
+
 
 return _M
