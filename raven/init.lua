@@ -19,7 +19,6 @@ local unpack = unpack or table.unpack -- luacheck: ignore
 local generate_event_id = util.generate_event_id
 local iso8601 = util.iso8601
 local json_encode = cjson.encode
-local errlog = util.errlog
 
 local catcher_trace_level = 4
 
@@ -88,10 +87,6 @@ end
 -- error_catcher: used to catch an error from xpcall and return a correct
 -- error message
 local function error_catcher(err)
-    if debug then
-        errlog("catch: ", err)
-    end
-
     return {
         message = err,
         culprit = get_culprit(catcher_trace_level),
@@ -108,7 +103,7 @@ local function capture_error_handler(err)
      local ok, json_exception = pcall(error_catcher, err)
      if not ok then
          -- when failed, json_exception is error message
-         errlog('failed to run exception catcher: ' .. tostring(json_exception))
+         util.errlog('failed to run exception catcher: ' .. tostring(json_exception))
          -- try to return something anyway (error message with no culprit and
          -- no stacktrace
          json_exception = {
@@ -325,7 +320,7 @@ function raven_mt:send_report(json, conf)
     local ok, err = self.sender:send(json_str)
 
     if not ok then
-        errlog("Failed to send to Sentry: ", err, " ",  json_str)
+        util.errlog("Failed to send to Sentry: ", err, " ",  json_str)
         return nil, err
     end
     return json.event_id
