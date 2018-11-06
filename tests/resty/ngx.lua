@@ -32,6 +32,26 @@ describe("nginx-lua network layer", function()
         assert_equal(shared.payload, payload)
     end)
 
+    test("send an event over HTTP (async)", function()
+        local sender = assert(ngx_sender.new({
+           dsn = "http://public-key:secret-key@127.0.0.1:15514/sentry/myproject",
+           async=true,
+        }))
+        local payload = '{ "foo": "bar" }'
+        local before = ngx.now()
+        assert(sender:send(payload))
+        -- as the response of ngx.now is cached as long as the coroutine is not suspended
+        -- the returned value should be exactly the same
+        assert_equal(before, ngx.now(), "event loop has been interrupted")
+
+        ngx.sleep(0.01) -- yield the current thread, allowing the message to be sent
+        assert_equal("POST", shared.method)
+        assert_equal("/sentry/api/myproject/store/", shared.uri)
+        assert_equal(tostring(#payload), shared.headers["content-length"])
+        assert_type(shared.headers["x-sentry-auth"], "string")
+        assert_equal(shared.payload, payload)
+    end)
+
     test("send an event over HTTPS (no cert verification)", function()
         local sender = assert(ngx_sender.new({ dsn = "https://public-key:secret-key@127.0.0.1:15515/sentry/myproject" }))
         local payload = '{ "foo": "bar" }'

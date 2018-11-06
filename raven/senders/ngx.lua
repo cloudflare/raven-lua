@@ -3,6 +3,10 @@
 -- This module can be used with the raw Lua module for nginx or the OpenResty
 -- bundle.
 --
+-- As socket API is not available in all contexts, the messages are queued and
+-- processed in a timer when necessary. This can be forced for all messages too
+-- in order to not wait for the message to be sent (see the `async` filed).
+--
 -- It will require the `lua_ssl_trusted_certificate` to be set correctly when
 -- reporting to a HTTPS endpoint.
 --
@@ -97,9 +101,6 @@ end
 -- messages are pushed into a queue and sent in a timer. Only one timer at most
 -- is running per instance (and per worker): timers are a scarce resource, we
 -- don't want to exhaust the timer pool during message storms.
---
--- TODO: expose an option on the ctor to always use this? it might be desirable
--- to not slow down hot code sections by sending messages
 
 local function send_task(premature, self)
     if premature then
@@ -139,14 +140,15 @@ function mt:send(json_str)
         "raven-lua-ngx/" .. _VERSION, auth, json_str)
     local phase = ngx_get_phase()
     -- rewrite_by_lua*, access_by_lua*, content_by_lua*, ngx.timer.*, ssl_certificate_by_lua*, ssl_session_fetch_by_lua*
-    if phase == 'rewrite' or
+    if (not self.async) and (
+        phase == 'rewrite' or
         phase == 'access' or
         phase == 'content' or
         phase == 'content' or
         phase == 'timer' or
         phase == 'ssl_cert' or
         phase == 'ssl_session_fetch'
-    then
+    ) then
         -- socket is available
         return send_msg(self, msg)
     else
@@ -181,6 +183,9 @@ end
 --  Must return `true` or `nil, error_message`.
 -- @field queue_limit Maximum number of message in the asynchronous sending queue
 --  (default: 50)
+-- @field async Always send message asynchronously, even when it can be sent
+--  right away. This is to prevent to slow down processing while contacting the
+--  Sentry server. (default: false)
 -- @table sender_conf
 
 --- Create a new sender object for the given DSN
@@ -196,6 +201,7 @@ function _M.new(conf)
     obj.verify_ssl = conf.verify_ssl
     obj.configure_socket = conf.configure_socket
     obj.queue_limit = conf.queue_limit or 50
+    obj.async = conf.async or false
     obj.send_queue = {}
     obj.task_running = false
 
