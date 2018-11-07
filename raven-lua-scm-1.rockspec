@@ -12,7 +12,10 @@ to Sentry.]],
    homepage = "https://github.com/cloudflare/raven-lua",
    license = "BSD 3-clause"
 }
-dependencies = {}
+dependencies = {
+  "lua >= 5.1",
+  "lua-cjson",
+}
 build = {
    type = "builtin",
    modules = {
