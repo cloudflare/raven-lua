@@ -14,10 +14,6 @@ package = "raven"
  }
  dependencies = {
     "lua >= 5.1",
-    "luasocket",
-    "lua-cjson",
-    "luaposix",
-    "luasec"
  }
  build = {
     type = "builtin",
