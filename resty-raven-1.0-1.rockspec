@@ -2,7 +2,6 @@ package = "raven"
  version = "1.0-1"
  source = {
     url = "git://github.com/inspectorioinc/raven-lua.git",
-    tag = "1.0-1",
  }
  description = {
     summary = "Lua (openresty) client for Sentry.",
@@ -18,6 +17,6 @@ package = "raven"
  build = {
     type = "builtin",
     modules =  {
-      raven = "raven"
+      raven = "raven.lua"
     }
  }
