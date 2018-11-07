@@ -17,12 +17,7 @@ package = "raven"
  }
  build = {
     type = "builtin",
-    modules =  {      
-    ["raven.senders.luasocket"] = "raven/senders/luasocket.lua",
-    ["raven.senders.ngx"] = "raven/senders/ngx.lua",
-    ["raven.senders.reference"] = "raven/senders/reference.lua",
-    ["raven.senders.test"] = "raven/senders/test.lua",
-    ["raven.init"] = "raven/init.lua",
-    ["raven.util"] = "raven/util.lua",
+    modules =  {
+      raven = "raven"
     }
  }
