@@ -144,7 +144,6 @@ function mt:send(json_str)
         phase == 'rewrite' or
         phase == 'access' or
         phase == 'content' or
-        phase == 'content' or
         phase == 'timer' or
         phase == 'ssl_cert' or
         phase == 'ssl_session_fetch'
