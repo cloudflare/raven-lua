@@ -168,6 +168,10 @@ end
 --  useless frames. The internal raven frames are automatically skipped, so a
 --  level of `1` is means that the direct caller will be reported as culprit.
 --
+-- @field fingerprint Event fingerprint array. See:
+--  - https://docs.sentry.io/development/sdk-dev/attributes/
+--  - https://docs.sentry.io/data-management/rollups/?platform=javascript#custom-grouping
+--
 -- @table report_conf
 
 
@@ -318,6 +322,9 @@ function raven_mt:send_report(json, conf)
 
         if conf.level then
             json.level = conf.level
+        end
+        if conf.fingerprint then
+            json.fingerprint = conf.fingerprint
         end
     else
         json.tags = self.tags
