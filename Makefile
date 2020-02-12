@@ -13,7 +13,7 @@ test: lint
 	tsc tests/*.lua
 	sed -e "s|%PWD%|$$PWD|" tests/sentry.conf > tests/sentry.conf.out
 	touch empty-file
-	resty --http-include $$PWD/tests/sentry.conf.out -e 'require("telescope.runner")(arg)' empty-file tests/resty/*.lua
+	resty --http-include $$PWD/tests/sentry.conf.out -e 'require("luarocks.loader"); require("telescope.runner")(arg)' empty-file tests/resty/*.lua
 
 .PHONY: doc
 doc:

@@ -1,44 +1,41 @@
-sudo: required
-dist: trusty
-
+dist: bionic
 os: linux
-
 language: c
 
 compiler:
   - gcc
 
-env:
-  matrix:
-    LUAROCKS_VERSION=2.4.2
-
 addons:
   apt:
+    sources:
+      - sourceline: 'deb http://openresty.org/package/ubuntu bionic main'
+        key_url: https://openresty.org/package/pubkey.gpg
     packages:
-        - lua5.1 lua5.1-dev git libssl-dev build-essential wget unzip
+      - lua5.1
+      - lua5.1-dev
+      - luarocks
+      - git
+      - libssl-dev
+      - build-essential
+      - wget
+      - unzip
+      - openresty
+      - openresty-resty
 
 cache:
   apt: true
   directories:
-  - download-cache
+    - /home/travis/.luarocks/
 
-before_script:
-  - wget -O- https://openresty.org/package/pubkey.gpg | sudo apt-key add -
-  - echo "deb http://openresty.org/package/ubuntu trusty main" | sudo tee -a /etc/apt/sources.list
-  - sudo apt-get update -qq
-  - sudo apt-get install --no-install-recommends openresty openresty-resty -y
-  - wget https://luarocks.org/releases/luarocks-${LUAROCKS_VERSION}.tar.gz
-  - tar zxpf luarocks-${LUAROCKS_VERSION}.tar.gz
-  - cd luarocks-${LUAROCKS_VERSION}
-  - ./configure; sudo make bootstrap
-  - sudo luarocks install lua-cjson
-  - sudo luarocks install luaposix
-  - sudo luarocks install https://raw.githubusercontent.com/jdesgats/telescope/master/rockspecs/telescope-scm-1.rockspec
-  - sudo luarocks install luasocket
-  - sudo luarocks install luasec
-  - sudo luarocks install luacheck
-  - cd ..
-  - rm -fr luarocks-${LUAROCKS_VERSION}
+install:
+  - luarocks show lua-cjson || luarocks --local install lua-cjson
+  - luarocks show luaposix || luarocks --local install luaposix
+  - luarocks show telescope || luarocks --local install https://raw.githubusercontent.com/jdesgats/telescope/master/rockspecs/telescope-scm-1.rockspec
+  - luarocks show luasocket || luarocks --local install luasocket
+  - luarocks show luasec || luarocks --local install luasec
+  - luarocks show luacheck || luarocks --local install luacheck
 
 script:
+  - export PATH=${HOME}/.luarocks/bin:${PATH}
+  - export LUA_PATH='/usr/share/lua/5.1/?.lua;;'
   - make test
