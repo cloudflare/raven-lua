@@ -44,13 +44,16 @@ function mt:send(json_str)
     return true
 end
 
---- Configuration table for the nginx sender.
+--- Configuration table for the lua-resty-http.
 -- @field dsn DSN string
 -- @field verify_ssl Whether or not the SSL certificate is checked (boolean,
 --  defaults to false)
--- @field cafile Path to a CA bundle (see the `cafile` parameter in the
---  [newcontext](https://github.com/brunoos/luasec/wiki/LuaSec-0.6#ssl_newcontext)
---  docs)
+-- @field keepalive Whether or not to keep connection alive (boolean,
+--  defaults to false)
+-- @field keepalive_timeout The maximum number of connections in the keepalive pool(int,
+--  defaults to 0)
+-- @field keepalive_pool Whether or not to keep connection alive (int,
+--  defaults to 0)
 -- @table sender_conf
 
 --- Create a new sender object for the given DSN
