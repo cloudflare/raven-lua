@@ -10,8 +10,7 @@ local util = require 'raven.util'
 local http = require 'resty.http'
 
 local tostring = tostring
-local cjson_encode = cjson.encode
-local pairs = pairs
+local csjon = cjson
 local setmetatable = setmetatable
 local table_concat = table.concat
 local parse_dsn = util.parse_dsn
@@ -32,14 +31,14 @@ function mt:send(json_str)
             ['X-Sentry-Auth'] = generate_auth_header(self),
             ["Content-Length"] = tostring(#json_str),
         },
-        body = cjson_encode(json_str),
+        body = cjson.encode(json_str),
         keepalive = self.opts.keepalive,
         keepalive_timeout = self.opts.keepalive_timeout,
         keepalive_pool = self.opts.keepalive_pool
     })
 
     if not res then
-        return nil, table_concat(res)
+        return nil, table_concat(err)
     end
 
     return true
