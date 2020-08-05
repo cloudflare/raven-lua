@@ -8,9 +8,9 @@
 
 local util = require 'raven.util'
 local http = require 'resty.http'
+local cjson = require 'cjson'
 
 local tostring = tostring
-local cjson = cjson
 local setmetatable = setmetatable
 local table_concat = table.concat
 local parse_dsn = util.parse_dsn
