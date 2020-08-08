@@ -9,8 +9,6 @@
 local util = require 'raven.util'
 local http = require 'resty.http'
 
-local log = ngx.log
-local ERR = ngx.ERR
 local ngx_timer_at = ngx.timer.at
 local ngx_get_phase = ngx.get_phase
 local tostring = tostring
@@ -52,7 +50,7 @@ local function consume_queue(premature, self)
 
             local ok, err = send_msg(self, msg)
             if not ok then
-                log(ERR, 'Raven failed to send message: ', err)
+                return util.errlog('Raven failed to send message: ', err)
             end
 
             table_remove(queue, 1)
@@ -60,7 +58,7 @@ local function consume_queue(premature, self)
     end, debug.traceback)
 
     if not ok then
-        log(ERR, 'Raven failed to run the async sender task: ', err)
+        util.errlog('Raven failed to run the async sender task: ', err)
     end
 
     self.task_running = false
