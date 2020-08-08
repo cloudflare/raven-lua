@@ -11,9 +11,7 @@ local http = require 'resty.http'
 
 local log = ngx.log
 local ERR = ngx.ERR
-local CRIT = ngx.CRIT
 local ngx_timer_at = ngx.timer.at
-local ngx_socket = ngx.socket
 local ngx_get_phase = ngx.get_phase
 local tostring = tostring
 local setmetatable = setmetatable
@@ -69,7 +67,7 @@ local function consume_queue(premature, self)
 end
 
 local function process_queue(self)
-   if not self.task_running then
+    if not self.task_running then
         local ok, err = ngx_timer_at(0, consume_queue, self)
         if not ok then
             return nil, 'Failed to create timer: ' .. err
@@ -100,7 +98,13 @@ function mt:send(json_str)
 
     -- Cosocket is only available in certain phases
     local phase = ngx_get_phase()
-    if  phase == 'rewrite' or phase == 'access' or phase == 'content' or phase == 'timer' or phase == 'ssl_cert' or phase == 'ssl_session_fetch' then
+    if  (phase == 'rewrite' or
+        phase == 'access' or
+        phase == 'content' or
+        phase == 'timer' or
+        phase == 'ssl_cert' or
+        phase == 'ssl_session_fetch')
+    then
         return send_msg(self, msg)
     else
         local queue = self.queue
