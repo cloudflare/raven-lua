@@ -50,6 +50,7 @@ local function consume_queue(premature, self)
 
             local ok, err = send_msg(self, msg)
             if not ok then
+                -- Would we want to return here to preserve message in queue or remove it losing logs?
                 return util.errlog('Raven failed to send message: ', err)
             end
 
@@ -96,7 +97,8 @@ function mt:send(json_str)
 
     -- Cosocket is only available in certain phases
     local phase = ngx_get_phase()
-    if  (phase == 'rewrite' or
+    if  (self.async) and (
+        phase == 'rewrite' or
         phase == 'access' or
         phase == 'content' or
         phase == 'timer' or
@@ -143,6 +145,9 @@ end
 --  defaults to 0)
 -- @field queue_limit Maximum number of events in the queue (int,
 --  defaults to 10)
+-- @field async Always send message asynchronously, even when it can be sent
+--  right away. This is to prevent to slow down processing while contacting the
+--  Sentry server. (default: false)
 -- @table sender_conf
 
 --- Create a new sender object for the given DSN
@@ -164,6 +169,7 @@ function _M.new(conf)
     obj.queue = {}
     obj.queue_limit = conf.queue_limit or 10
     obj.task_running = false
+    obj.async = conf.async or false
 
     return setmetatable(obj, mt)
 end
