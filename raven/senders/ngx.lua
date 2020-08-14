@@ -82,11 +82,18 @@ local function send_msg(self, msg)
         return nil, err
     end
 
-    local resp
-    resp, err = sock:receive('*a')
-    sock:close()
-    if not resp then
-        return nil, err
+    local resp, partial
+    resp, err, partial = sock:receive('*a')
+    if err then
+        -- If the connection was forcibly reset by the server after sending the
+        -- response, it will look like an error. To cover for this, take the
+        -- partial data as normal response and try to parse it
+        -- See: https://github.com/cloudflare/raven-lua/issues/30
+        if partial and partial ~= "" then
+            resp = partial
+        else
+            return nil, err
+        end
     end
 
     local status = resp:match("HTTP/%d%.%d (%d%d%d) %w+")
