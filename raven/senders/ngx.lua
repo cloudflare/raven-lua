@@ -46,7 +46,7 @@ X-Sentry-Auth: %s
 ]], '\r?\n', '\r\n')
 
 local CALLBACK_DEFAULT_ERRMSG =
-    "failed to onfigure socket (custom callback did not returned a value)"
+    "failed to configure socket (custom callback did not returned a value)"
 
 local function send_msg(self, msg)
     local ok
