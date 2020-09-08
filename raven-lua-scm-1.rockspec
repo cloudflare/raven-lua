@@ -14,7 +14,7 @@ to Sentry.]],
 }
 dependencies = {
   "lua >= 5.1",
-  "lua-cjson",
+  "lua-cjson"
 }
 build = {
    type = "builtin",
