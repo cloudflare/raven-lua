@@ -136,6 +136,8 @@ function _M.new(conf)
         logger = conf.logger or "root",
         tags = conf.tags or nil,
         extra = conf.extra or nil,
+        user = conf.user or nil,
+        environment = conf.environment or nil
     }
 
     return setmetatable(obj, raven_mt)
@@ -296,11 +298,12 @@ function raven_mt:send_report(json, conf)
         end
     end
 
-    json.event_id  = event_id
-    json.timestamp = iso8601()
-    json.level     = self.level
-    json.platform  = "lua"
-    json.logger    = self.logger
+    json.event_id    = event_id
+    json.timestamp   = iso8601()
+    json.level       = self.level
+    json.platform    = "lua"
+    json.logger      = self.logger
+    json.environment = self.environment
 
     if conf then
         json.tags = merge_tables(conf.tags, self.tags)
@@ -308,6 +311,15 @@ function raven_mt:send_report(json, conf)
 
         if conf.level then
             json.level = conf.level
+        end
+        if conf.user then
+            json.user = merge_tables(conf.user, self.user)
+        end
+        if conf.request then
+            json.request = conf.request
+        end
+        if conf.context then
+            json.context = conf.context
         end
     else
         json.tags = self.tags
