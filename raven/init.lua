@@ -136,7 +136,6 @@ function _M.new(conf)
         logger = conf.logger or "root",
         tags = conf.tags or nil,
         extra = conf.extra or nil,
-        user = conf.user or nil,
         environment = conf.environment or nil
     }
 
@@ -148,6 +147,15 @@ end
 -- to override this to something more sensible.
 function _M.get_server_name()
     return "undefined"
+end
+
+--- This method is reponsible to return the `request` field of an event.
+-- The default implementation just returns `{}`, users are encouraged
+-- to override this to something more sensible.
+-- See [Sentry's docs](https://develop.sentry.dev/sdk/event-payloads/request/)
+-- for the list of allowed properties.
+function _M.get_request_data()
+    return {}
 end
 
 --- This table can be used to tune the message reporting.
@@ -315,17 +323,15 @@ function raven_mt:send_report(json, conf)
         if conf.user then
             json.user = merge_tables(conf.user, self.user)
         end
-        if conf.request then
-            json.request = conf.request
-        end
-        if conf.context then
-            json.context = conf.context
+        if conf.contexts then
+            json.contexts = conf.contexts
         end
     else
         json.tags = self.tags
         json.extra = self.extra
     end
 
+    json.request  = _M.get_request_data()
     json.server_name = _M.get_server_name()
 
     local json_str = json_encode(json)
