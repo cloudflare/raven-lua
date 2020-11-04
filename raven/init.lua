@@ -136,7 +136,8 @@ function _M.new(conf)
         logger = conf.logger or "root",
         tags = conf.tags or nil,
         extra = conf.extra or nil,
-        environment = conf.environment or nil
+        environment = conf.environment or nil,
+        release = conf.release or nil
     }
 
     return setmetatable(obj, raven_mt)
