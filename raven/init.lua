@@ -159,6 +159,12 @@ function _M.get_request_data()
     return {}
 end
 
+--- This method can be used to tag a release in Sentry.
+-- Typically you can use it with a commit hash.
+function _M.get_release()
+    return ''
+end
+
 --- This table can be used to tune the message reporting.
 -- @field tags Tags for the message, they will be coalesced with the ones
 --  provided in the @{sentry_conf} table used in the constructor if any. In
@@ -334,6 +340,7 @@ function raven_mt:send_report(json, conf)
 
     json.request  = _M.get_request_data()
     json.server_name = _M.get_server_name()
+    json.releae = _M.get_release()
 
     local json_str = json_encode(json)
     local ok, err = self.sender:send(json_str)
