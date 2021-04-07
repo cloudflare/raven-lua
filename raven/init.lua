@@ -320,7 +320,6 @@ function raven_mt:send_report(json, conf)
     json.platform    = "lua"
     json.logger      = self.logger
     json.environment = self.environment
-    json.release     = self.release
 
     if conf then
         json.tags = merge_tables(conf.tags, self.tags)
@@ -342,6 +341,7 @@ function raven_mt:send_report(json, conf)
 
     json.request  = _M.get_request_data()
     json.server_name = self.server_name or _M.get_server_name()
+    json.release = self.release or _M.get_release()
 
     local json_str = json_encode(json)
     local ok, err = self.sender:send(json_str)
