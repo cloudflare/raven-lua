@@ -249,7 +249,7 @@ end
 -- @usage
 -- local raven_ngx = require("raven.senders.ngx")
 -- local rvn = raven.new(...)
--- rvn.get_quest_data = raven_ngx.get_request_data
+-- rvn.get_request_data = raven_ngx.get_request_data
 function _M.get_request_data()
     local phase = ngx.get_phase()
     -- the ngx.var.* API is not available in all contexts
@@ -262,10 +262,13 @@ function _M.get_request_data()
         phase == "log"
     then
         return {
-            host = ngx.var.http_host or nil
+            caller = "nginx",
+            host = ngx.var.http_host or nil,
         }
     end
-    return {}
+    return {
+        caller = "nginx",
+    }
 end
 
 return _M
