@@ -340,7 +340,7 @@ function raven_mt:send_report(json, conf)
 
     json.request  = _M.get_request_data()
     json.server_name = _M.get_server_name()
-    json.releae = _M.get_release()
+    json.release = _M.get_release()
 
     local json_str = json_encode(json)
     local ok, err = self.sender:send(json_str)
