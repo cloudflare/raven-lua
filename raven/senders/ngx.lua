@@ -240,4 +240,11 @@ function _M.get_server_name()
     return "undefined"
 end
 
+function _M.get_request_data()
+    local request = {
+        host = ngx.var.http_host or nil
+    }
+    return request
+end
+
 return _M
