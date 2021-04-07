@@ -240,11 +240,32 @@ function _M.get_server_name()
     return "undefined"
 end
 
+--- Returns the value of the `request_data` variable if possible.
+-- Otherwise (wrong phase), this will return {}.
+--
+-- It is intended to be used as a `get_request_data` override on the main raven
+-- instance.
+--
+-- @usage
+-- local raven_ngx = require("raven.senders.ngx")
+-- local rvn = raven.new(...)
+-- rvn.get_quest_data = raven_ngx.get_request_data
 function _M.get_request_data()
-    local request = {
-        host = ngx.var.http_host or nil
-    }
-    return request
+    local phase = ngx.get_phase()
+    -- the ngx.var.* API is not available in all contexts
+    if phase == "set" or
+        phase == "rewrite" or
+        phase == "access" or
+        phase == "content" or
+        phase == "header_filter" or
+        phase == "body_filter" or
+        phase == "log"
+    then
+        return {
+            host = ngx.var.http_host or nil
+        }
+    end
+    return {}
 end
 
 return _M
