@@ -263,7 +263,13 @@ function _M.get_request_data()
     then
         return {
             caller = "nginx",
+            method = ngx.var.request_method or nil,
             host = ngx.var.http_host or nil,
+            url = ngx.var.request_uri or nil,
+            query_string = ngx.var.query_string or nil,
+            env = {
+                REMOTE_ADDR = ngx.var.remote_addr or nil,
+            },
         }
     end
     return {
