@@ -137,7 +137,8 @@ function _M.new(conf)
         tags = conf.tags or nil,
         extra = conf.extra or nil,
         environment = conf.environment or nil,
-        release = conf.release or nil
+        release = conf.release or nil,
+        server_name = conf.server_name or nil
     }
 
     return setmetatable(obj, raven_mt)
@@ -339,8 +340,8 @@ function raven_mt:send_report(json, conf)
     end
 
     json.request  = _M.get_request_data()
-    json.server_name = _M.get_server_name()
-    json.releae = _M.get_release()
+    json.server_name = self.server_name or _M.get_server_name()
+    json.release = self.release or _M.get_release()
 
     local json_str = json_encode(json)
     local ok, err = self.sender:send(json_str)
