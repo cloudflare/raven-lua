@@ -8,7 +8,10 @@
 -- @license BSD 3-clause (see LICENSE file)
 
 local util = require 'raven.util'
-local cjson = require 'cjson'
+
+-- If cjson not avilable, attempt to use 'json' instead.
+local _, cjson = pcall(require, 'cjson')
+local _, jsonlib = pcall(require, 'json')
 
 local _M = {}
 _M._VERSION = util._VERSION
@@ -18,7 +21,7 @@ local table_insert = table.insert
 local unpack = unpack or table.unpack -- luacheck: ignore
 local generate_event_id = util.generate_event_id
 local iso8601 = util.iso8601
-local json_encode = cjson.encode
+local json_encode = cjson.encode or jsonlib.encode
 
 local catcher_trace_level = 4
 
