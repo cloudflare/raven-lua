@@ -268,8 +268,33 @@ function _M.get_request_data()
             url = ngx.var.request_uri or nil,
             query_string = ngx.var.query_string or nil,
             env = {
+                -- some information can be only accessed if the request is at log phase
+                HOSTNAME = ngx.var.hostname,
+                METHOD = ngx.var.request_method or nil,
+                BODY_BYTES_SENT = ngx.var.body_bytes_sent or nil,
+                BYTES_RECEIVED = ngx.var.bytes_received or nil,
+                BYTES_SENT = ngx.var.bytes_sent or nil,
+                NGINX_VERSION = ngx.var.nginx_version or nil,
                 REMOTE_ADDR = ngx.var.remote_addr or nil,
-            },
+                REMOTE_PORT = ngx.var.remote_port or nil,
+                REQUEST_TIME = ngx.var.request_time or nil,
+                STATUS = ngx.var.status or nil,
+                USER_AGENT = ngx.var.http_user_agent or nil,
+                CONTENT_TYPE = ngx.var.http_content_type or nil,
+                CONTENT_LENGTH = ngx.var.http_content_length or nil,
+                -- proxy related information
+                PROXY_ADD_X_FORWARDED_FOR = ngx.var.proxy_add_x_forwarded_for or nil,
+                UPSTREAM_ADDR = ngx.var.upstream_add or nil,
+                UPSTREAM_BYTES_RECEIVED = ngx.var.upstream_bytes_received or nil,
+                UPSTREAM_BYTES_SENT = ngx.var.upstream_bytes_sent or nil,
+                UPSTREAM_CACHE_STATUS = ngx.var.upstream_cache_status or nil,
+                UPSTREAM_CONNECT_TIME = ngx.var.upstream_connect_time or nil,
+                UPSTREAM_FIRST_BYTE_TIME = ngx.var.upstream_first_byte_time or nil,
+                UPSTREAM_HEADER_TIME = ngx.var.upstream_header_time or nil,
+                UPSTREAM_RESPONSE_LENGTH = ngx.var.upstream_response_length or nil,
+                UPSTREAM_RESPONSE_TIME = ngx.var.upstream_response_time or nil,
+                UPSTREAM_STATUS = ngx.var.upstream_status or nil,
+             },
         }
     end
     return {
