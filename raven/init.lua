@@ -163,7 +163,7 @@ end
 --- This method can be used to tag a release in Sentry.
 -- Typically you can use it with a commit hash.
 function _M.get_release()
-    return ''
+    return nil
 end
 
 --- This table can be used to tune the message reporting.
