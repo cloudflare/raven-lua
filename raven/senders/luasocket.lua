@@ -36,7 +36,7 @@ function mt:send(json_str)
         method = "POST",
         url = self.server,
         headers = {
-            ['Content-Type'] = 'applicaion/json',
+            ['Content-Type'] = 'application/json',
             ['User-Agent'] = "raven-lua-socket/" .. _VERSION,
             ['X-Sentry-Auth'] = generate_auth_header(self),
             ["Content-Length"] = tostring(#json_str),
