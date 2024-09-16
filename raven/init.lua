@@ -136,6 +136,9 @@ function _M.new(conf)
         logger = conf.logger or "root",
         tags = conf.tags or nil,
         extra = conf.extra or nil,
+        environment = conf.environment or nil,
+        release = conf.release or nil,
+        server_name = conf.server_name or nil
     }
 
     return setmetatable(obj, raven_mt)
@@ -146,6 +149,21 @@ end
 -- to override this to something more sensible.
 function _M.get_server_name()
     return "undefined"
+end
+
+--- This method is reponsible to return the `request` field of an event.
+-- The default implementation just returns `{}`, users are encouraged
+-- to override this to something more sensible.
+-- See [Sentry's docs](https://develop.sentry.dev/sdk/event-payloads/request/)
+-- for the list of allowed properties.
+function _M.get_request_data()
+    return {}
+end
+
+--- This method can be used to tag a release in Sentry.
+-- Typically you can use it with a commit hash.
+function _M.get_release()
+    return nil
 end
 
 --- This table can be used to tune the message reporting.
@@ -296,11 +314,12 @@ function raven_mt:send_report(json, conf)
         end
     end
 
-    json.event_id  = event_id
-    json.timestamp = iso8601()
-    json.level     = self.level
-    json.platform  = "lua"
-    json.logger    = self.logger
+    json.event_id    = event_id
+    json.timestamp   = iso8601()
+    json.level       = self.level
+    json.platform    = "lua"
+    json.logger      = self.logger
+    json.environment = self.environment
 
     if conf then
         json.tags = merge_tables(conf.tags, self.tags)
@@ -309,12 +328,20 @@ function raven_mt:send_report(json, conf)
         if conf.level then
             json.level = conf.level
         end
+        if conf.user then
+            json.user = merge_tables(conf.user, self.user)
+        end
+        if conf.contexts then
+            json.contexts = conf.contexts
+        end
     else
         json.tags = self.tags
         json.extra = self.extra
     end
 
-    json.server_name = _M.get_server_name()
+    json.request  = _M.get_request_data()
+    json.server_name = self.server_name or _M.get_server_name()
+    json.release = self.release or _M.get_release()
 
     local json_str = json_encode(json)
     local ok, err = self.sender:send(json_str)
