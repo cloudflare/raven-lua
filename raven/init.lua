@@ -27,6 +27,10 @@ local catcher_trace_level = 4
 --  find a sender suitable with your application
 -- @field level  Set the message level (string), defaults to `"error"`
 -- @field logger Sets the message logger (string), defaults to `"root"`
+-- @field release Sets the release id for message, defaults to `SENTRY_RELEASE`
+--  environment variable
+-- @field environment Sets the environment id for message, default to
+--  `SENTRY_ENVIRONMENT` environment variable
 -- @field tags   Defaults tags for sent messages, defaults to `{}`. Example:
 --  `{ "foo"="bar", ... }`
 -- @field extra  Default extra data sent with messages, defaults to `{}`
@@ -128,12 +132,16 @@ _M.capture_error_handler = capture_error_handler
 --    },
 --    tags = { foo = "bar", abc = "def" },
 --    logger = "foo",
+--    release = "4e1243bd22c66e76c2ba9eddc1f91394e57f9f83",
+--    environment = "staging",
 -- }
 function _M.new(conf)
     local obj = {
         sender = assert(conf.sender, "sender is required"),
         level = conf.level or "error",
         logger = conf.logger or "root",
+        release = conf.release or os.getenv("SENTRY_RELEASE"),
+        environment = conf.environment or os.getenv("SENTRY_ENVIRONMENT"),
         tags = conf.tags or nil,
         extra = conf.extra or nil,
     }
@@ -159,6 +167,10 @@ end
 -- @field trace_level Starting stack level for the report (can be used to skip
 --  useless frames. The internal raven frames are automatically skipped, so a
 --  level of `1` is means that the direct caller will be reported as culprit.
+--
+-- @field fingerprint Event fingerprint array. See:
+--  - https://docs.sentry.io/development/sdk-dev/attributes/
+--  - https://docs.sentry.io/data-management/rollups/?platform=javascript#custom-grouping
 --
 -- @table report_conf
 
@@ -301,6 +313,8 @@ function raven_mt:send_report(json, conf)
     json.level     = self.level
     json.platform  = "lua"
     json.logger    = self.logger
+    json.release   = self.release
+    json.environment = self.environment
 
     if conf then
         json.tags = merge_tables(conf.tags, self.tags)
@@ -308,6 +322,9 @@ function raven_mt:send_report(json, conf)
 
         if conf.level then
             json.level = conf.level
+        end
+        if conf.fingerprint then
+            json.fingerprint = conf.fingerprint
         end
     else
         json.tags = self.tags
