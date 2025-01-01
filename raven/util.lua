@@ -12,7 +12,9 @@ local string_find = string.find
 local string_sub = string.sub
 local string_match = string.match
 local math_random = math.random
+local math_randomseed = math.randomseed
 local os_date = os.date
+local os_time = os.time
 
 local _M = {}
 
@@ -27,6 +29,9 @@ _M._VERSION = _VERSION
 function _M.errlog(...)
     print("[ERROR]", ...)
 end
+
+-- Seed the random number generator
+math_randomseed(os_time())
 
 --- Returns a string suitable to be used as `event_id`.
 -- @return a new random `event_id` string.
